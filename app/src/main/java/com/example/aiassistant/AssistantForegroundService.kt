@@ -17,26 +17,41 @@ class AssistantForegroundService : Service() {
 
     private lateinit var voiceManager: VoiceManager
     private lateinit var deviceController: DeviceController
-    private val geminiClient = GeminiClient("AQ.Ab8RN6J1tryTLk-GI0XGqR7P_cSUfZTkoPE_iPBKXn71_PYvVw") // Paste your free key from Google AI Studio
+    private lateinit var speakerVerifier: SpeakerVerifier
+    private val geminiClient = GeminiClient("AQ.Ab8RN6J1tryTLk-GI0XGqR7P_cSUfZTkoPE_iPBKXn71_PYvVw")
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
         voiceManager = VoiceManager(this)
         deviceController = DeviceController(this)
+        speakerVerifier = SpeakerVerifier(this)
         startForeground(1001, createNotification())
     }
 
-    fun processVoiceCommand(persona: AssistantPersona, spokenText: String) {
-        val wasDeviceAction = deviceController.handleActionCommand(spokenText)
+    /**
+     * Entry point called when voice input is received.
+     */
+    fun handleIncomingVoice(
+        persona: AssistantPersona,
+        spokenText: String,
+        voiceEmbedding: FloatArray?
+    ) {
+        // Step 1: Speaker Verification
+        if (voiceEmbedding != null && !speakerVerifier.isAuthorizedUser(voiceEmbedding)) {
+            // Voice does not match enrolled profile -> ignore completely
+            return
+        }
 
+        // Step 2: Check for system commands (e.g. YouTube, Timer)
+        val wasDeviceAction = deviceController.handleActionCommand(spokenText)
         if (wasDeviceAction) {
             val confirm = if (persona == AssistantPersona.JARVIS) "Right away, sir." else "Done."
             voiceManager.speak(confirm, persona)
             return
         }
 
-        // Send to Gemini LLM for reasoning
+        // Step 3: Route prompt to Gemini AI
         serviceScope.launch {
             val reply = geminiClient.queryAssistant(spokenText, persona)
             voiceManager.speak(reply, persona)
@@ -55,8 +70,8 @@ class AssistantForegroundService : Service() {
         }
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Dual AI Assistant Active")
-            .setContentText("Jarvis & Friday ready for commands...")
+            .setContentTitle("Biometric AI Assistant Active")
+            .setContentText("Listening only for your voice...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
