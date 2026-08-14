@@ -17,7 +17,7 @@ class AssistantForegroundService : Service() {
 
     private lateinit var voiceManager: VoiceManager
     private lateinit var deviceController: DeviceController
-    private val geminiClient = GeminiClient(AQ.Ab8RN6J1tryTLk-GI0XGqR7P_cSUfZTkoPE_iPBKXn71_PYvVw) // Paste your free key from Google AI Studio
+    private val geminiClient = GeminiClient("AQ.Ab8RN6J1tryTLk-GI0XGqR7P_cSUfZTkoPE_iPBKXn71_PYvVw") // Paste your free key from Google AI Studio
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
