@@ -8,24 +8,39 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class AssistantForegroundService : Service() {
 
     private lateinit var voiceManager: VoiceManager
+    private lateinit var deviceController: DeviceController
+    private val geminiClient = GeminiClient("YOUR_GEMINI_API_KEY") // Paste your free key from Google AI Studio
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
         voiceManager = VoiceManager(this)
+        deviceController = DeviceController(this)
         startForeground(1001, createNotification())
     }
 
-    fun triggerPersona(persona: AssistantPersona, query: String) {
-        val greeting = if (persona == AssistantPersona.JARVIS) {
-            "Jarvis online. At your service."
-        } else {
-            "Friday here. How can I help you today?"
+    fun processVoiceCommand(persona: AssistantPersona, spokenText: String) {
+        val wasDeviceAction = deviceController.handleActionCommand(spokenText)
+
+        if (wasDeviceAction) {
+            val confirm = if (persona == AssistantPersona.JARVIS) "Right away, sir." else "Done."
+            voiceManager.speak(confirm, persona)
+            return
         }
-        voiceManager.speak(greeting, persona)
+
+        // Send to Gemini LLM for reasoning
+        serviceScope.launch {
+            val reply = geminiClient.queryAssistant(spokenText, persona)
+            voiceManager.speak(reply, persona)
+        }
     }
 
     private fun createNotification(): Notification {
@@ -41,7 +56,7 @@ class AssistantForegroundService : Service() {
 
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Dual AI Assistant Active")
-            .setContentText("Listening for 'Jarvis' and 'Friday'...")
+            .setContentText("Jarvis & Friday ready for commands...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
