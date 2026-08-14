@@ -4,9 +4,11 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +20,9 @@ class AssistantForegroundService : Service() {
     private lateinit var voiceManager: VoiceManager
     private lateinit var deviceController: DeviceController
     private lateinit var speakerVerifier: SpeakerVerifier
+    private var wakeLock: PowerManager.WakeLock? = null
+    
+    // Replace with your Google AI Studio API key
     private val geminiClient = GeminiClient("AQ.Ab8RN6J1tryTLk-GI0XGqR7P_cSUfZTkoPE_iPBKXn71_PYvVw")
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -26,32 +31,35 @@ class AssistantForegroundService : Service() {
         voiceManager = VoiceManager(this)
         deviceController = DeviceController(this)
         speakerVerifier = SpeakerVerifier(this)
+
+        // Keep CPU active when phone screen locks
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIAssistant::LockScreenWakeLock").apply {
+            acquire(24 * 60 * 60 * 1000L) // 24 hours
+        }
+
         startForeground(1001, createNotification())
     }
 
-    /**
-     * Entry point called when voice input is received.
-     */
     fun handleIncomingVoice(
         persona: AssistantPersona,
         spokenText: String,
         voiceEmbedding: FloatArray?
     ) {
-        // Step 1: Speaker Verification
+        // 1. Biometric verification
         if (voiceEmbedding != null && !speakerVerifier.isAuthorizedUser(voiceEmbedding)) {
-            // Voice does not match enrolled profile -> ignore completely
             return
         }
 
-        // Step 2: Check for system commands (e.g. YouTube, Timer)
+        // 2. Hardware / Call Intent actions
         val wasDeviceAction = deviceController.handleActionCommand(spokenText)
         if (wasDeviceAction) {
-            val confirm = if (persona == AssistantPersona.JARVIS) "Right away, sir." else "Done."
+            val confirm = if (persona == AssistantPersona.JARVIS) "Executing now, sir." else "Done."
             voiceManager.speak(confirm, persona)
             return
         }
 
-        // Step 3: Route prompt to Gemini AI
+        // 3. AI Reasoning
         serviceScope.launch {
             val reply = geminiClient.queryAssistant(spokenText, persona)
             voiceManager.speak(reply, persona)
@@ -70,13 +78,16 @@ class AssistantForegroundService : Service() {
         }
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Biometric AI Assistant Active")
-            .setContentText("Listening only for your voice...")
+            .setContentTitle("Jarvis & Friday Active")
+            .setContentText("Listening continuously & on lock screen...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
 
     override fun onDestroy() {
+        if (wakeLock?.isHeld == true) {
+            wakeLock?.release()
+        }
         voiceManager.shutdown()
         super.onDestroy()
     }
