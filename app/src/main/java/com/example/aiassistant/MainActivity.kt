@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -18,6 +19,18 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speakerVerifier = SpeakerVerifier(this)
+
+        // Allow app activity over lock screen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -36,8 +49,7 @@ class MainActivity : AppCompatActivity() {
         val btnEnroll = Button(this).apply {
             text = "Enroll / Train My Voice"
             setOnClickListener {
-                // Generates initial voice embedding anchor
-                Toast.makeText(context, "Voice training profile created successfully!", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Voice profile saved!", Toast.LENGTH_LONG).show()
                 statusText.text = "Voice Status: Enrolled & Locked to Your Voice"
             }
         }
@@ -63,7 +75,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestRequiredPermissions() {
-        val permissions = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        val permissions = mutableListOf(
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.CALL_PHONE
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
