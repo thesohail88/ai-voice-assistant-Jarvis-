@@ -17,7 +17,15 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.Switch
+import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.ActivityCompat
 
 class MainActivity : Activity() {
@@ -55,7 +63,6 @@ class MainActivity : Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            // Multi-gradient deep space canvas
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(
@@ -76,7 +83,7 @@ class MainActivity : Activity() {
             )
         }
 
-        // --- HUD Hero Header ---
+        // HUD Header
         val hudHeader = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -111,17 +118,15 @@ class MainActivity : Activity() {
         }
         titleColumn.addView(subTitleTv)
         hudHeader.addView(titleColumn)
-
         mainLayout.addView(hudHeader)
 
-        // --- 1. Live Telemetry & Control Panel ---
+        // 1. Live Telemetry Panel
         val telemetryCard = createGlassHUDCard("#00F0FF", "#0A192F")
         val telemetryLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18))
         }
 
-        // Top Status Header Row
         val statusHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -155,7 +160,6 @@ class MainActivity : Activity() {
 
         addSpacer(telemetryLayout, 16)
 
-        // Telemetry Metrics Grid
         val metricsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -167,7 +171,6 @@ class MainActivity : Activity() {
 
         addSpacer(telemetryLayout, 18)
 
-        // Action Command Buttons
         val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
 
         val startBtn = createGlowingButton("⚡ INITIALIZE ENGINE", "#0284C7", "#00F0FF") {
@@ -186,7 +189,7 @@ class MainActivity : Activity() {
 
         addSpacer(mainLayout, 18)
 
-        // --- 2. Futuristic Switcher Card ---
+        // 2. Switcher Card
         val switchCard = createGlassHUDCard("#38BDF8", "#0B1528")
         val switchLayout = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -239,7 +242,7 @@ class MainActivity : Activity() {
 
         addSpacer(mainLayout, 24)
 
-        // --- 3. Contact Voicemail Router Card ---
+        // 3. Contact Voicemail Router Card
         val routingHeader = TextView(this).apply {
             text = "TARGET ROUTING RULES"
             textSize = 12f
@@ -315,7 +318,7 @@ class MainActivity : Activity() {
 
         addSpacer(mainLayout, 26)
 
-        // --- 4. Active Rules List ---
+        // 4. Active Protocols List
         val rulesHeaderRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -476,5 +479,4 @@ class MainActivity : Activity() {
         ActivityCompat.requestPermissions(this, permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
     }
 
-    // --- High-End Custom Graphics Builders ---
-    private fun
+    private fun 
