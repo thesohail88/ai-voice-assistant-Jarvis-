@@ -19,8 +19,8 @@ class GeminiClient(private val apiKey: String) {
         .readTimeout(25, TimeUnit.SECONDS)
         .build()
 
-    // Using the stable flash endpoint
-    private val endpointUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    // Updated to the current production Gemini 2.5 Flash endpoint
+    private val endpointUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
@@ -30,7 +30,7 @@ class GeminiClient(private val apiKey: String) {
         }
 
         val jsonPayload = JSONObject().apply {
-            put("system_instruction", JSONObject().put("parts", JSONObject().put("text", systemPrompt)))
+            put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
             put("contents", JSONArray().put(
                 JSONObject().put("parts", JSONArray().put(
                     JSONObject().put("text", userPrompt)
@@ -52,7 +52,6 @@ class GeminiClient(private val apiKey: String) {
 
             if (!response.isSuccessful) {
                 Log.e("GeminiClient", "API Error (${response.code}): $rawJson")
-                // Return exact server message to inspect on device
                 return@withContext "Error ${response.code}: " + extractErrorMessage(rawJson)
             }
 
@@ -83,7 +82,7 @@ class GeminiClient(private val apiKey: String) {
         """.trimIndent()
 
         val jsonPayload = JSONObject().apply {
-            put("system_instruction", JSONObject().put("parts", JSONObject().put("text", systemPrompt)))
+            put("system_instruction", JSONObject().put("parts", JSONObject().put("text", systemPrompt))))
             put("contents", JSONArray().put(
                 JSONObject().put("parts", JSONArray().apply {
                     put(JSONObject().put("inline_data", JSONObject().apply {
