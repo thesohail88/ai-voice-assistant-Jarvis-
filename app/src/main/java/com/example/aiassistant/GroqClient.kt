@@ -45,14 +45,14 @@ class GroqClient(private val apiKey: String) {
 
             if (!response.isSuccessful) {
                 Log.e("GroqClient", "Whisper HTTP ${response.code}: $rawJson")
-                return@withContext Pair(null, "Whisper Error ${response.code}: $rawJson")
+                return@withContext Pair<String?, String?>(null, "Whisper Error ${response.code}: $rawJson")
             }
 
             val transcript = JSONObject(rawJson).optString("text", "").trim()
-            return@withContext Pair(transcript, null)
+            return@withContext Pair<String?, String?>(transcript, null)
         } catch (e: Exception) {
             Log.e("GroqClient", "Transcription connection failed", e)
-            return@withContext Pair(null, "Transcription network error: ${e.localizedMessage}")
+            return@withContext Pair<String?, String?>(null, "Transcription network error: ${e.localizedMessage}")
         }
     }
 
@@ -107,26 +107,25 @@ class GroqClient(private val apiKey: String) {
 
     suspend fun processVoiceAudio(
         wavAudioBytes: ByteArray,
-        onTranscriptLogged: (String) -> Unit
+        onTranscriptLogged: ((String) -> Unit)? = null
     ): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
         val (transcript, error) = transcribeAudio(wavAudioBytes)
 
         if (error != null) {
-            return@withContext Pair(AssistantPersona.JARVIS, error)
+            return@withContext Pair<AssistantPersona?, String?>(AssistantPersona.JARVIS, error)
         }
 
         if (transcript.isNullOrBlank()) {
-            return@withContext Pair(null, null)
+            return@withContext Pair<AssistantPersona?, String?>(null, null)
         }
 
-        onTranscriptLogged(transcript)
+        onTranscriptLogged?.invoke(transcript)
         val lowerText = transcript.lowercase()
 
-        // Flexible wake word matching (handles punctuation and common homophones)
         val persona = when {
-            lowerText.contains("jarvis") || lowerText.contains("jarvis.") || lowerText.contains("jarvis,") -> AssistantPersona.JARVIS
-            lowerText.contains("friday") || lowerText.contains("friday.") || lowerText.contains("friday,") -> AssistantPersona.FRIDAY
-            else -> return@withContext Pair(null, null) // Ignore background chatter
+            lowerText.contains("jarvis") -> AssistantPersona.JARVIS
+            lowerText.contains("friday") -> AssistantPersona.FRIDAY
+            else -> return@withContext Pair<AssistantPersona?, String?>(null, null)
         }
 
         val cleanedPrompt = transcript
@@ -137,6 +136,6 @@ class GroqClient(private val apiKey: String) {
         val promptToSend = if (cleanedPrompt.isBlank()) "Acknowledge that you are online and ready." else cleanedPrompt
         val reply = queryAssistant(promptToSend, persona)
 
-        return@withContext Pair(persona, reply)
+        return@withContext Pair<AssistantPersona?, String?>(persona, reply)
     }
 }
