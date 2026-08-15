@@ -22,48 +22,45 @@ class GroqClient(private val apiKey: String) {
     private val transcribeUrl = "https://api.groq.com/openai/v1/audio/transcriptions"
     private val chatUrl = "https://api.groq.com/openai/v1/chat/completions"
 
-    /**
-     * 1. Transcribes incoming WAV audio to text in ~100ms using Whisper Large v3
-     */
-    private suspend fun transcribeAudio(wavAudioBytes: ByteArray): String? = withContext(Dispatchers.IO) {
+    suspend fun transcribeAudio(wavAudioBytes: ByteArray): Pair<String?, String?> = withContext(Dispatchers.IO) {
         val requestBody = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart(
-                "file", "speech.wav",
+                "file", "recording.wav",
                 wavAudioBytes.toRequestBody("audio/wav".toMediaType())
             )
             .addFormDataPart("model", "whisper-large-v3")
-            .addFormDataPart("temperature", "0.0")
+            .addFormDataPart("response_format", "json")
             .build()
 
         val request = Request.Builder()
             .url(transcribeUrl)
-            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Authorization", "Bearer ${apiKey.trim()}")
             .post(requestBody)
             .build()
 
         try {
             val response = client.newCall(request).execute()
             val rawJson = response.body?.string() ?: ""
+
             if (!response.isSuccessful) {
-                Log.e("GroqClient", "Transcription error ${response.code}: $rawJson")
-                return@withContext null
+                Log.e("GroqClient", "Whisper HTTP ${response.code}: $rawJson")
+                return@withContext Pair(null, "Whisper Error ${response.code}: $rawJson")
             }
-            return@withContext JSONObject(rawJson).optString("text", "").trim()
+
+            val transcript = JSONObject(rawJson).optString("text", "").trim()
+            return@withContext Pair(transcript, null)
         } catch (e: Exception) {
-            Log.e("GroqClient", "Transcription failed", e)
-            return@withContext null
+            Log.e("GroqClient", "Transcription connection failed", e)
+            return@withContext Pair(null, "Transcription network error: ${e.localizedMessage}")
         }
     }
 
-    /**
-     * 2. Runs the transcribed text through Llama 3.3 70B for instant reasoning
-     */
     suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
-            "You are Jarvis, Sohail's AI. Respond intelligently, politely, and very concisely in a natural and human voice (1-2 sentences max)."
+            "You are Jarvis, Sohail Shaikh's AI assistant. Keep all responses direct, intelligent, and concise in a natural and human voice (1-2 sentences max)."
         } else {
-            "You are Friday, an efficient, direct female AI. Respond sharply, crisply, and concisely in a natural and human voice (1-2 sentences max)."
+            "You are Friday, an efficient, direct female AI assistant. Respond sharply and concisely in a natural and human voice (1-2 sentences max)."
         }
 
         val messages = JSONArray().apply {
@@ -75,13 +72,13 @@ class GroqClient(private val apiKey: String) {
             put("model", "llama-3.3-70b-versatile")
             put("messages", messages)
             put("max_tokens", 100)
-            put("temperature", 0.5)
+            put("temperature", 0.6)
         }
 
         val body = jsonPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
             .url(chatUrl)
-            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Authorization", "Bearer ${apiKey.trim()}")
             .addHeader("Content-Type", "application/json")
             .post(body)
             .build()
@@ -89,9 +86,10 @@ class GroqClient(private val apiKey: String) {
         try {
             val response = client.newCall(request).execute()
             val rawJson = response.body?.string() ?: ""
+
             if (!response.isSuccessful) {
-                Log.e("GroqClient", "Chat error ${response.code}: $rawJson")
-                return@withContext "Apologies, I encountered an issue."
+                Log.e("GroqClient", "Llama HTTP ${response.code}: $rawJson")
+                return@withContext "Error ${response.code}: Server issue."
             }
 
             val json = JSONObject(rawJson)
@@ -107,27 +105,36 @@ class GroqClient(private val apiKey: String) {
         }
     }
 
-    /**
-     * Complete pipeline: Whisper STT -> Local Wake Word Check -> Llama 3.3 LLM
-     */
-    suspend fun processVoiceAudio(wavAudioBytes: ByteArray): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
-        val transcript = transcribeAudio(wavAudioBytes) ?: return@withContext Pair(null, null)
-        val lowerText = transcript.lowercase()
+    suspend fun processVoiceAudio(
+        wavAudioBytes: ByteArray,
+        onTranscriptLogged: (String) -> Unit
+    ): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
+        val (transcript, error) = transcribeAudio(wavAudioBytes)
 
-        // 100% deterministic local wake word check
-        val persona = when {
-            lowerText.contains("jarvis") -> AssistantPersona.JARVIS
-            lowerText.contains("friday") -> AssistantPersona.FRIDAY
-            else -> return@withContext Pair(null, null) // Ignore ambient noise without calling the LLM
+        if (error != null) {
+            return@withContext Pair(AssistantPersona.JARVIS, error)
         }
 
-        // Clean user command
+        if (transcript.isNullOrBlank()) {
+            return@withContext Pair(null, null)
+        }
+
+        onTranscriptLogged(transcript)
+        val lowerText = transcript.lowercase()
+
+        // Flexible wake word matching (handles punctuation and common homophones)
+        val persona = when {
+            lowerText.contains("jarvis") || lowerText.contains("jarvis.") || lowerText.contains("jarvis,") -> AssistantPersona.JARVIS
+            lowerText.contains("friday") || lowerText.contains("friday.") || lowerText.contains("friday,") -> AssistantPersona.FRIDAY
+            else -> return@withContext Pair(null, null) // Ignore background chatter
+        }
+
         val cleanedPrompt = transcript
             .replace("(?i)jarvis".toRegex(), "")
             .replace("(?i)friday".toRegex(), "")
             .trim()
 
-        val promptToSend = if (cleanedPrompt.isBlank()) "Acknowledge that you are listening and ready." else cleanedPrompt
+        val promptToSend = if (cleanedPrompt.isBlank()) "Acknowledge that you are online and ready." else cleanedPrompt
         val reply = queryAssistant(promptToSend, persona)
 
         return@withContext Pair(persona, reply)
