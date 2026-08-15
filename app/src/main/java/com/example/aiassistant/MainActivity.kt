@@ -74,14 +74,24 @@ class MainActivity : AppCompatActivity() {
         requestRequiredPermissions()
     }
 
+
     private fun requestRequiredPermissions() {
-        val permissions = mutableListOf(
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.CALL_PHONE
-        )
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 101)
+    val permissions = mutableListOf(
+        Manifest.permission.RECORD_AUDIO,
+        Manifest.permission.CALL_PHONE,
+        Manifest.permission.READ_PHONE_STATE
+    )
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        permissions.add(Manifest.permission.ANSWER_PHONE_CALLS)
     }
-}
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 101)
+    }
+    
+
+    
