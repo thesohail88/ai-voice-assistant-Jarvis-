@@ -29,7 +29,7 @@ class AssistantForegroundService : Service() {
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // ⚠️ Replace with your actual Gemini API Key from Google AI Studio
+    // ⚠️ Ensure your Gemini API Key is pasted here
     private val apiKey = "AQ.Ab8RN6LGTH90nHMefG8sOBoVQi3FEo70G9rIYIgGni-lXwSbBg"
     private lateinit var geminiClient: GeminiClient
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -50,7 +50,7 @@ class AssistantForegroundService : Service() {
 
         serviceScope.launch {
             delay(1500)
-            voiceManager.speak("Assistant online and listening.", AssistantPersona.JARVIS)
+            voiceManager.speak("Systems operational. I am ready.", AssistantPersona.JARVIS)
             startHardwareListening()
         }
     }
@@ -65,22 +65,20 @@ class AssistantForegroundService : Service() {
             serviceScope.launch {
                 val (persona, reply) = geminiClient.processVoiceAudio(wavAudioChunk)
 
-                if (persona != null && reply != null) {
+                if (persona != null && !reply.isNullOrBlank()) {
                     Toast.makeText(applicationContext, "${persona.name}: $reply", Toast.LENGTH_SHORT).show()
 
-                    val wasHandled = deviceController.handleActionCommand(reply)
-                    if (!wasHandled) {
-                        voiceManager.speak(reply, persona)
-                    }
+                    // Always speak the response back to the user
+                    voiceManager.speak(reply, persona)
+
+                    // Execute any matching system intents in parallel
+                    deviceController.handleActionCommand(reply)
                 }
             }
         }
         continuousRecorder?.startListening()
     }
 
-    /**
-     * Prevents Android from killing the assistant when the app is swiped away from Recents
-     */
     override fun onTaskRemoved(rootIntent: Intent?) {
         val restartServiceIntent = Intent(applicationContext, AssistantForegroundService::class.java).also {
             it.setPackage(packageName)
