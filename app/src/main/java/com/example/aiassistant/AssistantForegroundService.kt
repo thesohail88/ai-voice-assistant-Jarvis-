@@ -30,7 +30,7 @@ class AssistantForegroundService : Service() {
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // ⚠️ Replace with your free Groq API Key (starts with gsk_...)
+    // ⚠️ Paste your actual Groq key starting with gsk_
     private val apiKey = "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"
     private lateinit var groqClient: GroqClient
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -69,10 +69,14 @@ class AssistantForegroundService : Service() {
         continuousRecorder?.stopListening()
         continuousRecorder = ContinuousAudioRecorder { wavAudioChunk ->
             serviceScope.launch {
-                val (persona, reply) = groqClient.processVoiceAudio(wavAudioChunk)
+                val (persona, reply) = groqClient.processVoiceAudio(wavAudioChunk) { heardText ->
+                    serviceScope.launch(Dispatchers.Main) {
+                        Toast.makeText(applicationContext, "Heard: \"$heardText\"", Toast.LENGTH_SHORT).show()
+                    }
+                }
 
                 if (persona != null && !reply.isNullOrBlank()) {
-                    Toast.makeText(applicationContext, "${persona.name}: $reply", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "${persona.name}: $reply", Toast.LENGTH_LONG).show()
                     voiceManager.speak(reply, persona)
                     deviceController.handleActionCommand(reply)
                 }
@@ -124,8 +128,8 @@ class AssistantForegroundService : Service() {
         }
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Jarvis & Friday Active (Groq)")
-            .setContentText("Sub-second AI listening in background...")
+            .setContentTitle("Jarvis & Friday Active")
+            .setContentText("Listening 24/7 in background...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()
