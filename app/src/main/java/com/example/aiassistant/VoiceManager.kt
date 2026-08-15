@@ -35,9 +35,6 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Pauses third-party music playback (Spotify, YT Music, etc.)
-     */
     private fun requestAudioFocusAndPauseMusic() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val attributes = AudioAttributes.Builder()
@@ -57,9 +54,6 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    /**
-     * Releases audio focus so background music continues playing.
-     */
     private fun releaseAudioFocusAndResumeMusic() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
@@ -69,10 +63,14 @@ class VoiceManager(private val context: Context) : TextToSpeech.OnInitListener {
         }
     }
 
-    fun speak(text: String, persona: AssistantPersona) {
+    fun speak(text: String, persona: AssistantPersona, languageCode: String = "en-IN") {
         if (!isReady) return
 
         requestAudioFocusAndPauseMusic()
+
+        // Set TTS language dynamic locale
+        val locale = Locale.forLanguageTag(languageCode)
+        tts.language = locale
 
         when (persona) {
             AssistantPersona.JARVIS -> {
