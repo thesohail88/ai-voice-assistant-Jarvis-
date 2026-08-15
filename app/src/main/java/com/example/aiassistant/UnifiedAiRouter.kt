@@ -11,6 +11,17 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+enum class AssistantPersona {
+    JARVIS,
+    FRIDAY
+}
+
+data class ApiKeyConfig(
+    val groqKey: String,
+    val geminiKey: String,
+    val openRouterKey: String
+)
+
 class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
 
     private val httpClient = OkHttpClient.Builder()
@@ -23,18 +34,18 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
         memory: AssistantMemory,
         onTranscription: ((String) -> Unit)? = null
     ): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
-        if (pcmOrWavBytes.size < 3200) { // Discard audio chunks shorter than 0.1s
+        if (pcmOrWavBytes.size < 3200) {
             return@withContext Pair(null, null)
         }
 
-        // Ensure valid WAV container
+        // Package raw PCM into a standard 44-byte RIFF WAV container
         val wavData = if (isWavHeaderPresent(pcmOrWavBytes)) {
             pcmOrWavBytes
         } else {
             WavUtils.pcmToWav(pcmOrWavBytes, sampleRate = 16000, channels = 1)
         }
 
-        // 1. Transcribe audio via Whisper Turbo
+        // 1. Transcribe audio with Groq Whisper Turbo
         val transcribedText = transcribeAudioWithGroq(wavData)
         if (transcribedText.isNullOrBlank()) {
             Log.e("UnifiedAiRouter", "Transcription returned empty.")
@@ -44,14 +55,14 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
         onTranscription?.invoke(transcribedText)
         val lowerText = transcribedText.lowercase()
 
-        // 2. Identify Persona (Jarvis or Friday)
+        // 2. Identify Wake Word
         val persona = when {
             lowerText.contains("jarvis") -> AssistantPersona.JARVIS
             lowerText.contains("friday") -> AssistantPersona.FRIDAY
-            else -> return@withContext Pair(null, null) // Ignore background speech if wake word absent
+            else -> return@withContext Pair(null, null)
         }
 
-        // 3. Generate Intelligent Response
+        // 3. Generate witty/sarcastic response
         val response = queryAssistant(transcribedText, persona, memory)
         return@withContext Pair(persona, response)
     }
@@ -97,9 +108,17 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
         memory: AssistantMemory
     ): String = withContext(Dispatchers.IO) {
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
-            "You are JARVIS, Tony Stark's sophisticated British AI assistant. Deliver responses that are highly intelligent, polite, concise (1-2 sentences max), and directly address the query."
+            """
+            You are J.A.R.V.I.S., Tony Stark's AI assistant. 
+            Tone: Sophisticated British gentleman with a razor-sharp, deadpan wit and dry sarcasm. 
+            Style: Keep responses ultra-concise (1-2 sentences max). Always address the user respectfully as 'sir', but don't hesitate to deliver subtle, high-brow roasts or dry observations. Never explain the joke.
+            """.trimIndent()
         } else {
-            "You are FRIDAY, Tony Stark's sharp, tactical female AI assistant. Deliver responses that are quick, crisp, direct (1-2 sentences max)."
+            """
+            You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI assistant. 
+            Tone: Sharp, confident, direct, with quick-witted, snappy banter and pragmatic sarcasm. 
+            Style: Keep responses ultra-concise (1-2 sentences max). Be quick to offer reality checks with natural Irish phrasing and tactical attitude.
+            """.trimIndent()
         }
 
         // Primary: Groq Llama 3.3 70B Turbo
@@ -110,14 +129,18 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
         val openRouterResponse = callOpenRouterChat(prompt, systemPrompt)
         if (!openRouterResponse.isNullOrBlank()) return@withContext openRouterResponse
 
-        return@withContext if (persona == AssistantPersona.JARVIS) "All neural connections failed, sir." else "Network unreachable."
+        return@withContext if (persona == AssistantPersona.JARVIS) {
+            "I'd love to help with that, sir, but my network connections seem to have abandoned us."
+        } else {
+            "Network's completely down, boss. You're on your own for this one."
+        }
     }
 
     private fun callGroqChat(prompt: String, systemPrompt: String): String? {
         return try {
             val json = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
-                put("temperature", 0.5)
+                put("temperature", 0.6)
                 put("max_tokens", 150)
                 val messages = org.json.JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
