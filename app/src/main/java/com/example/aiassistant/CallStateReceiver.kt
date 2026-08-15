@@ -42,35 +42,36 @@ class CallStateReceiver : BroadcastReceiver() {
             TelephonyManager.CALL_STATE_RINGING -> {
                 isIncomingRinging = true
                 callStartTime = System.currentTimeMillis()
-                Log.d("VoicemailReceiver", "Call ringing from: $savedCallerNumber. Waiting for user response...")
             }
 
             TelephonyManager.CALL_STATE_OFFHOOK -> {
-                // User answered the call manually -> DO NOT trigger voicemail
                 if (lastState == TelephonyManager.CALL_STATE_RINGING) {
                     isIncomingRinging = false
-                    Log.d("VoicemailReceiver", "Call answered by user. Voicemail cancelled.")
                 }
             }
 
             TelephonyManager.CALL_STATE_IDLE -> {
-                // Ringing finished without OFFHOOK -> Call was missed, timed out, or user was busy/declined
                 if (isIncomingRinging && (lastState == TelephonyManager.CALL_STATE_RINGING)) {
                     isIncomingRinging = false
 
-                    // If number was masked by OS broadcast, fetch latest missed call from CallLog
+                    val languageManager = ContactLanguageManager(context)
+
+                    // Skip execution if user disabled the voicemail toggle
+                    if (!languageManager.isVoicemailEnabled()) {
+                        Log.d("CallStateReceiver", "Voicemail & SMS auto-responder is disabled. Skipping.")
+                        savedCallerNumber = ""
+                        lastState = currentState
+                        return
+                    }
+
                     val finalCallerNumber = if (savedCallerNumber.isNotBlank()) {
                         savedCallerNumber
                     } else {
                         getLatestMissedCallNumber(context) ?: "Unknown Caller"
                     }
 
-                    Log.d("VoicemailReceiver", "Call missed/unanswered from: $finalCallerNumber. Triggering AI Voicemail.")
-
-                    val languageManager = ContactLanguageManager(context)
                     val preferredLanguage = languageManager.getLanguageForContact(finalCallerNumber)
 
-                    // Dispatch to Assistant Foreground Service
                     val serviceIntent = Intent(context, AssistantForegroundService::class.java).apply {
                         putExtra("ACTION_VOICEMAIL_LOGGED", true)
                         putExtra("CALLER_NUMBER", finalCallerNumber)
