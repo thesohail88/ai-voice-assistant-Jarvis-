@@ -6,6 +6,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
 import kotlinx.coroutines.*
+import java.io.ByteArrayOutputStream
 import kotlin.math.sqrt
 
 class ContinuousAudioRecorder(
@@ -20,9 +21,8 @@ class ContinuousAudioRecorder(
     private var isRecording = false
     private var recordingJob: Job? = null
 
-    // Voice Activity Detection (VAD) variables
-    private val silenceThreshold = 1200.0 // Noise floor sensitivity
-    private val utteranceBuffer = mutableListOf<Byte>()
+    private val silenceThreshold = 1200.0
+    private val outputStream = ByteArrayOutputStream()
     private var isSpeaking = false
     private var silenceFramesCount = 0
 
@@ -67,7 +67,7 @@ class ContinuousAudioRecorder(
     private fun calculateRMS(buffer: ShortArray, readCount: Int): Double {
         var sum = 0.0
         for (i in 0 until readCount) {
-            sum += buffer[i] * buffer[i]
+            sum += (buffer[i] * buffer[i]).toDouble()
         }
         return sqrt(sum / readCount)
     }
@@ -80,27 +80,24 @@ class ContinuousAudioRecorder(
         }
 
         if (rms > silenceThreshold) {
-            // User is currently speaking
             isSpeaking = true
             silenceFramesCount = 0
-            synchronized(utteranceBuffer) {
-                utteranceBuffer.addAll(byteChunk.toList())
+            synchronized(outputStream) {
+                outputStream.write(byteChunk, 0, byteChunk.size)
             }
         } else if (isSpeaking) {
-            // User paused speaking
             silenceFramesCount++
-            synchronized(utteranceBuffer) {
-                utteranceBuffer.addAll(byteChunk.toList())
+            synchronized(outputStream) {
+                outputStream.write(byteChunk, 0, byteChunk.size)
             }
 
-            // ~1.2 seconds of silence signals end of spoken command
             if (silenceFramesCount > 15) {
                 isSpeaking = false
                 silenceFramesCount = 0
                 val completeUtterance: ByteArray
-                synchronized(utteranceBuffer) {
-                    completeUtterance = utteranceBuffer.toByteArray()
-                    utteranceBuffer.clear()
+                synchronized(outputStream) {
+                    completeUtterance = outputStream.toByteArray()
+                    outputStream.reset()
                 }
                 if (completeUtterance.isNotEmpty()) {
                     onSpeechDetected(completeUtterance)
