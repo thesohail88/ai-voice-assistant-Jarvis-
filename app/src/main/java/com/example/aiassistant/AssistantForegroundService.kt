@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -24,16 +25,20 @@ class AssistantForegroundService : Service() {
     private lateinit var audioManager: AudioManager
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var toneGenerator: ToneGenerator? = null
 
-    // ⚠️ Replace with your Google AI Studio API key
-    private val geminiClient = GeminiClient("AQ.Ab8RN6LGTH90nHMefG8sOBoVQi3FEo70G9rIYIgGni-lXwSbBg")
+    // ⚠️ REPLACE WITH YOUR ACTUAL GOOGLE AI STUDIO KEY
+    private val apiKey = "AQ.Ab8RN6LGTH90nHMefG8sOBoVQi3FEo70G9rIYIgGni-lXwSbBg"
+    private lateinit var geminiClient: GeminiClient
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
         voiceManager = VoiceManager(this)
         deviceController = DeviceController(this)
+        geminiClient = GeminiClient(apiKey)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIAssistant::HardwareMicWakeLock").apply {
@@ -45,7 +50,17 @@ class AssistantForegroundService : Service() {
     }
 
     private fun startHardwareListening() {
+        if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isBlank()) {
+            serviceScope.launch {
+                voiceManager.speak("Warning: Gemini API Key is not set.", AssistantPersona.JARVIS)
+            }
+            return
+        }
+
         continuousRecorder = ContinuousAudioRecorder { pcmAudioChunk ->
+            // Beep to confirm speech activity was captured
+            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
+
             serviceScope.launch {
                 val (persona, reply) = geminiClient.processVoiceAudio(pcmAudioChunk)
 
@@ -74,14 +89,15 @@ class AssistantForegroundService : Service() {
         }
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Jarvis & Friday Active")
-            .setContentText("Hardware microphone stream is live 24/7...")
+            .setContentTitle("Jarvis & Friday Listening")
+            .setContentText("Hardware mic active. Say 'Jarvis' or 'Friday'...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
 
     override fun onDestroy() {
         continuousRecorder?.stopListening()
+        toneGenerator?.release()
         if (wakeLock?.isHeld == true) wakeLock?.release()
         voiceManager.shutdown()
         super.onDestroy()
