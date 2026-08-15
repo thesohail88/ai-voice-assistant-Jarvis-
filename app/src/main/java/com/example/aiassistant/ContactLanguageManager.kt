@@ -16,6 +16,15 @@ class ContactLanguageManager(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("voicemail_contact_rules", Context.MODE_PRIVATE)
 
+    // Voicemail master toggle state
+    fun isVoicemailEnabled(): Boolean {
+        return prefs.getBoolean("key_voicemail_enabled", true)
+    }
+
+    fun setVoicemailEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("key_voicemail_enabled", enabled).apply()
+    }
+
     fun saveContactRule(number: String, name: String, languageName: String, languageCode: String) {
         val cleanNumber = normalizeNumber(number)
         val json = JSONObject().apply {
@@ -34,8 +43,8 @@ class ContactLanguageManager(context: Context) {
 
     fun getAllRules(): List<ContactRule> {
         val list = mutableListOf<ContactRule>()
-        prefs.all.forEach { (_, value) ->
-            if (value is String) {
+        prefs.all.forEach { (key, value) ->
+            if (key != "key_voicemail_enabled" && value is String) {
                 try {
                     val json = JSONObject(value)
                     list.add(
