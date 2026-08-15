@@ -10,11 +10,11 @@ import android.telecom.TelecomManager
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
 
-class CallInterceptorReceiver : появилисьBroadcastReceiver() {
+class CallInterceptorReceiver : BroadcastReceiver() {
 
     companion object {
         var isAutoAnswerEnabled = true
-        var autoAnswerDelayMs: Long = 10000L // Answers after ~2-3 rings (10 seconds)
+        var autoAnswerDelayMs: Long = 12000L // Set to 12 seconds
     }
 
     override fun onReceive(context: Context, intent: Intent) {
