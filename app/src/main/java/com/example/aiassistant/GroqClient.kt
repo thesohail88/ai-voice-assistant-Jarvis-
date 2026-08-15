@@ -11,16 +11,20 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
 class GroqClient(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
     private val transcribeUrl = "https://api.groq.com/openai/v1/audio/transcriptions"
     private val chatUrl = "https://api.groq.com/openai/v1/chat/completions"
+
+    private val jarvisGreetings = listOf("At your service, sir.", "Yes, sir?", "Online and listening.", "How can I help, sir?")
+    private val fridayGreetings = listOf("Yes?", "Online and ready.", "Listening.", "Go ahead.")
 
     suspend fun transcribeAudio(wavAudioBytes: ByteArray): Pair<String?, String?> = withContext(Dispatchers.IO) {
         val requestBody = MultipartBody.Builder()
@@ -29,7 +33,7 @@ class GroqClient(private val apiKey: String) {
                 "file", "recording.wav",
                 wavAudioBytes.toRequestBody("audio/wav".toMediaType())
             )
-            .addFormDataPart("model", "whisper-large-v3")
+            .addFormDataPart("model", "whisper-large-v3-turbo") // Ultra-fast Turbo STT
             .addFormDataPart("response_format", "json")
             .build()
 
@@ -58,9 +62,9 @@ class GroqClient(private val apiKey: String) {
 
     suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
-            "You are Jarvis, Sohail Shaikh's AI assistant. Keep all responses direct, intelligent, and concise in a natural and human voice (1-2 sentences max)."
+            "You are Jarvis, Sohail's AI assistant. Keep all responses direct, intelligent, and concise (1-2 sentences max)."
         } else {
-            "You are Friday, an efficient, direct female AI assistant. Respond sharply and concisely in a natural and human voice (1-2 sentences max)."
+            "You are Friday, an efficient, direct female AI assistant. Respond sharply and concisely (1-2 sentences max)."
         }
 
         val messages = JSONArray().apply {
@@ -71,8 +75,8 @@ class GroqClient(private val apiKey: String) {
         val jsonPayload = JSONObject().apply {
             put("model", "llama-3.3-70b-versatile")
             put("messages", messages)
-            put("max_tokens", 100)
-            put("temperature", 0.6)
+            put("max_tokens", 60) // Capped tokens for instant response time
+            put("temperature", 0.5)
         }
 
         val body = jsonPayload.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
@@ -131,11 +135,20 @@ class GroqClient(private val apiKey: String) {
         val cleanedPrompt = transcript
             .replace("(?i)jarvis".toRegex(), "")
             .replace("(?i)friday".toRegex(), "")
+            .replace("[.,?!]".toRegex(), "")
             .trim()
 
-        val promptToSend = if (cleanedPrompt.isBlank()) "Acknowledge that you are online and ready." else cleanedPrompt
-        val reply = queryAssistant(promptToSend, persona)
+        // INSTANT ACKNOWLEDGMENT: Skip LLM network hop if the user only called the name
+        if (cleanedPrompt.isBlank()) {
+            val instantReply = if (persona == AssistantPersona.JARVIS) {
+                jarvisGreetings[Random.nextInt(jarvisGreetings.size)]
+            } else {
+                fridayGreetings[Random.nextInt(fridayGreetings.size)]
+            }
+            return@withContext Pair<AssistantPersona?, String?>(persona, instantReply)
+        }
 
+        val reply = queryAssistant(cleanedPrompt, persona)
         return@withContext Pair<AssistantPersona?, String?>(persona, reply)
     }
 }
