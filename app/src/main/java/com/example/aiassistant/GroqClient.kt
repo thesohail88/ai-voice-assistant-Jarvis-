@@ -61,9 +61,9 @@ class GroqClient(private val apiKey: String) {
      */
     suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
-            "You are Jarvis, Tony Stark's AI. Respond intelligently, politely, and very concisely (1-2 sentences max)."
+            "You are Jarvis, Sohail's AI. Respond intelligently, politely, and very concisely in a natural and human voice (1-2 sentences max)."
         } else {
-            "You are Friday, an efficient, direct female AI. Respond sharply, crisply, and concisely (1-2 sentences max)."
+            "You are Friday, an efficient, direct female AI. Respond sharply, crisply, and concisely in a natural and human voice (1-2 sentences max)."
         }
 
         val messages = JSONArray().apply {
