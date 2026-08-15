@@ -19,7 +19,6 @@ class GeminiClient(private val apiKey: String) {
         .readTimeout(25, TimeUnit.SECONDS)
         .build()
 
-    // Updated to the current production Gemini 2.5 Flash endpoint
     private val endpointUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
@@ -66,7 +65,7 @@ class GeminiClient(private val apiKey: String) {
                 .trim()
         } catch (e: Exception) {
             Log.e("GeminiClient", "Query Connection Error", e)
-            return@withContext "Connection failed: ${e.localizedMessage}"
+            return@withContext "Connection failed: ${e.localizedMessage ?: "Unknown error"}"
         }
     }
 
@@ -82,7 +81,7 @@ class GeminiClient(private val apiKey: String) {
         """.trimIndent()
 
         val jsonPayload = JSONObject().apply {
-            put("system_instruction", JSONObject().put("parts", JSONObject().put("text", systemPrompt))))
+            put("system_instruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
             put("contents", JSONArray().put(
                 JSONObject().put("parts", JSONArray().apply {
                     put(JSONObject().put("inline_data", JSONObject().apply {
@@ -109,7 +108,7 @@ class GeminiClient(private val apiKey: String) {
             if (!response.isSuccessful) {
                 Log.e("GeminiClient", "Audio API Error (${response.code}): $rawJson")
                 val errMsg = extractErrorMessage(rawJson)
-                return@withContext Pair(AssistantPersona.JARVIS, "Server error: $errMsg")
+                return@withContext Pair<AssistantPersona?, String?>(AssistantPersona.JARVIS, "Server error: $errMsg")
             }
 
             val json = JSONObject(rawJson)
@@ -123,21 +122,21 @@ class GeminiClient(private val apiKey: String) {
                 .trim()
 
             if (text.startsWith("NO_WAKE_WORD")) {
-                return@withContext Pair(null, null)
+                return@withContext Pair<AssistantPersona?, String?>(null, null)
             }
 
             return@withContext when {
                 text.startsWith("PERSONA:JARVIS|") -> {
-                    Pair(AssistantPersona.JARVIS, text.removePrefix("PERSONA:JARVIS|").trim())
+                    Pair<AssistantPersona?, String?>(AssistantPersona.JARVIS, text.removePrefix("PERSONA:JARVIS|").trim())
                 }
                 text.startsWith("PERSONA:FRIDAY|") -> {
-                    Pair(AssistantPersona.FRIDAY, text.removePrefix("PERSONA:FRIDAY|").trim())
+                    Pair<AssistantPersona?, String?>(AssistantPersona.FRIDAY, text.removePrefix("PERSONA:FRIDAY|").trim())
                 }
-                else -> Pair(AssistantPersona.JARVIS, text)
+                else -> Pair<AssistantPersona?, String?>(AssistantPersona.JARVIS, text)
             }
         } catch (e: Exception) {
             Log.e("GeminiClient", "Audio Connection Error", e)
-            return@withContext Pair(null, null)
+            return@withContext Pair<AssistantPersona?, String?>(null, null)
         }
     }
 
