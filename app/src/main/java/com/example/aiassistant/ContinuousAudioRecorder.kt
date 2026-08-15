@@ -21,8 +21,7 @@ class ContinuousAudioRecorder(
     private var isRecording = false
     private var recordingJob: Job? = null
 
-    // Sensitive speech threshold
-    private val silenceThreshold = 300.0
+    private val silenceThreshold = 250.0
     private val outputStream = ByteArrayOutputStream()
     private var isSpeaking = false
     private var silenceFramesCount = 0
@@ -92,7 +91,6 @@ class ContinuousAudioRecorder(
                 outputStream.write(byteChunk, 0, byteChunk.size)
             }
 
-            // Cut down silence wait to ~500ms (6 frames) for near-instant dispatch
             if (silenceFramesCount > 6) {
                 isSpeaking = false
                 silenceFramesCount = 0
