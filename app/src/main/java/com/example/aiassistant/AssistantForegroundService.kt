@@ -31,7 +31,7 @@ class AssistantForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     // Updated with your API Key
-    private val apiKey = "AQ.Ab8RN6LGTH90nHMefG8sOBoVQi3FEo70G9rIYIgGni-lXwSbBg"
+    private val apiKey = "AQ.Ab8RN6LNWwcJsFDXsOj9dzu7talXI8TmKFQDtgDXisvtqZoQhA"
     private lateinit var geminiClient: GeminiClient
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
