@@ -2,145 +2,326 @@ package com.example.aiassistant
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.WindowManager
-import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
+import android.provider.ContactsContract
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
 
-    private lateinit var speakerVerifier: SpeakerVerifier
     private lateinit var languageManager: ContactLanguageManager
-
-    // Supported languages: Display Name -> BCP-47 Tag
-    private val languages = listOf(
-        "English (US)" to "en-US",
-        "English (UK)" to "en-GB",
-        "English (India)" to "en-IN",
-        "Hindi (India)" to "hi-IN",
-        "Spanish (Spain)" to "es-ES",
-        "French (France)" to "fr-FR",
-        "German (Germany)" to "de-DE",
-        "Japanese (Japan)" to "ja-JP",
-        "Arabic (Saudi Arabia)" to "ar-SA"
-    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        speakerVerifier = SpeakerVerifier(this)
         languageManager = ContactLanguageManager(this)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
+        setContent {
+            VoicemailManagerTheme {
+                VoicemailScreen(
+                    languageManager = languageManager,
+                    onStartService = { startAssistantService() },
+                    onRequestPermissions = { requestAppPermissions() },
+                    onPickContact = { launcher ->
+                        launcher.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI))
+                    }
+                )
+            }
+        }
+    }
+
+    private fun startAssistantService() {
+        val serviceIntent = Intent(this, AssistantForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
         } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
+            startService(serviceIntent)
         }
-
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(40, 50, 40, 40)
-        }
-
-        // Section 1: Contact Language Configuration
-        val titleText = TextView(this).apply {
-            text = "Contact Language Settings"
-            textSize = 18f
-            setPadding(0, 0, 0, 20)
-        }
-
-        val inputContact = EditText(this).apply {
-            hint = "Contact Phone Number or Name"
-        }
-
-        val spinnerLanguage = Spinner(this).apply {
-            adapter = ArrayAdapter(
-                this@MainActivity,
-                android.R.layout.simple_spinner_dropdown_item,
-                languages.map { it.first }
-            )
-        }
-
-        val savedListText = TextView(this).apply {
-            textSize = 14f
-            setPadding(0, 20, 0, 20)
-            text = formatSavedContacts()
-        }
-
-        val btnSaveContact = Button(this).apply {
-            text = "Save Language for Contact"
-            setOnClickListener {
-                val contact = inputContact.text.toString().trim()
-                if (contact.isNotEmpty()) {
-                    val selectedCode = languages[spinnerLanguage.selectedItemPosition].second
-                    languageManager.setLanguageForContact(contact, selectedCode)
-                    Toast.makeText(context, "Saved $contact -> ${languages[spinnerLanguage.selectedItemPosition].first}", Toast.LENGTH_SHORT).show()
-                    inputContact.text.clear()
-                    savedListText.text = formatSavedContacts()
-                } else {
-                    Toast.makeText(context, "Please enter a contact number", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
-        // Section 2: Service Controls
-        val btnStart = Button(this).apply {
-            text = "Start Background Assistant"
-            setOnClickListener {
-                val serviceIntent = Intent(this@MainActivity, AssistantForegroundService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(serviceIntent)
-                } else {
-                    startService(serviceIntent)
-                }
-            }
-        }
-
-        layout.addView(titleText)
-        layout.addView(inputContact)
-        layout.addView(spinnerLanguage)
-        layout.addView(btnSaveContact)
-        layout.addView(savedListText)
-        layout.addView(btnStart)
-
-        val scrollView = ScrollView(this)
-        scrollView.addView(layout)
-        setContentView(scrollView)
-
-        requestRequiredPermissions()
+        Toast.makeText(this, "Assistant & Voicemail Active", Toast.LENGTH_SHORT).show()
     }
 
-    private fun formatSavedContacts(): String {
-        val all = languageManager.getAllCustomContacts()
-        if (all.isEmpty()) return "No custom contact rules saved yet (Default: English)."
-        val builder = StringBuilder("Configured Contact Rules:\n")
-        all.forEach { (contact, lang) ->
-            builder.append("• $contact: $lang\n")
-        }
-        return builder.toString()
-    }
-
-    private fun requestRequiredPermissions() {
+    private fun requestAppPermissions() {
         val permissions = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.CALL_PHONE,
-            Manifest.permission.READ_PHONE_STATE
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.ANSWER_PHONE_CALLS,
+            Manifest.permission.CALL_PHONE
         )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            permissions.add(Manifest.permission.ANSWER_PHONE_CALLS)
-        }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-
-        ActivityCompat.requestPermissions(this, permissions.toTypedArray(), 101)
+        requestPermissions(permissions.toTypedArray(), 101)
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun VoicemailScreen(
+    languageManager: ContactLanguageManager,
+    onStartService: () -> Unit,
+    onRequestPermissions: () -> Unit,
+    onPickContact: (androidx.activity.result.ActivityResultLauncher<Intent>) -> Unit
+) {
+    var contactName by remember { mutableStateOf("") }
+    var contactNumber by remember { mutableStateOf("") }
+    var selectedLanguageName by remember { mutableStateOf("English") }
+    var selectedLanguageCode by remember { mutableStateOf("en") }
+    var expandedDropdown by remember { mutableStateOf(false) }
+
+    var rulesList by remember { mutableStateOf(languageManager.getAllRules()) }
+
+    val languages = listOf(
+        Pair("English", "en"),
+        Pair("Hindi", "hi"),
+        Pair("Spanish", "es"),
+        Pair("French", "fr"),
+        Pair("German", "de"),
+        Pair("Arabic", "ar"),
+        Pair("Mandarin", "zh")
+    )
+
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val uri: Uri? = result.data?.data
+        if (uri != null) {
+            val cursor = languageManager.let {
+                androidx.compose.ui.platform.LocalContext.currentOrNull?.contentResolver?.query(
+                    uri, arrayOf(
+                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                        ContactsContract.CommonDataKinds.Phone.NUMBER
+                    ), null, null, null
+                )
+            }
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    contactName = it.getString(0) ?: "Unknown"
+                    contactNumber = it.getString(1) ?: ""
+                }
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("AI Assistant & Voicemail", fontWeight = FontWeight.Bold) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
+        }
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Autonomous Voicemail Agent",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            "Automatically disconnects incoming calls and logs custom multilingual voicemails.",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = onStartService) {
+                                Text("Start Service")
+                            }
+                            OutlinedButton(onClick = onRequestPermissions) {
+                                Text("Permissions")
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Configure Contact Voicemail", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { onPickContact(contactPickerLauncher) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.Person, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (contactName.isBlank()) "Choose Contact from Phone" else "Contact: $contactName")
+                        }
+
+                        if (contactNumber.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Number: $contactNumber", fontSize = 13.sp, color = Color.Gray)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        ExposedDropdownMenuBox(
+                            expanded = expandedDropdown,
+                            onExpandedChange = { expandedDropdown = !expandedDropdown }
+                        ) {
+                            OutlinedTextField(
+                                value = selectedLanguageName,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Voicemail Language") },
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = expandedDropdown,
+                                onDismissRequest = { expandedDropdown = false }
+                            ) {
+                                languages.forEach { (langName, langCode) ->
+                                    DropdownMenuItem(
+                                        text = { Text(langName) },
+                                        onClick = {
+                                            selectedLanguageName = langName
+                                            selectedLanguageCode = langCode
+                                            expandedDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = {
+                                if (contactNumber.isNotBlank()) {
+                                    languageManager.saveContactRule(
+                                        contactNumber,
+                                        if (contactName.isBlank()) contactNumber else contactName,
+                                        selectedLanguageName,
+                                        selectedLanguageCode
+                                    )
+                                    rulesList = languageManager.getAllRules()
+                                    contactName = ""
+                                    contactNumber = ""
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = contactNumber.isNotBlank()
+                        ) {
+                            Text("Save Voicemail Rule")
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    "Configured Contacts (${rulesList.size})",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (rulesList.isEmpty()) {
+                item {
+                    Text(
+                        "No custom rules set. Default language is English.",
+                        color = Color.Gray,
+                        fontSize = 13.sp
+                    )
+                }
+            } else {
+                items(rulesList) { rule ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(rule.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                Text(rule.number, fontSize = 13.sp, color = Color.Gray)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                AssistChip(
+                                    onClick = {},
+                                    label = { Text("Language: ${rule.languageName}") }
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    languageManager.removeContactRule(rule.number)
+                                    rulesList = languageManager.getAllRules()
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Remove Rule",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VoicemailManagerTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Color(0xFF38BDF8),
+            onPrimary = Color(0xFF0F172A),
+            primaryContainer = Color(0xFF0369A1),
+            onPrimaryContainer = Color(0xFFF0F9FF),
+            surface = Color(0xFF1E293B),
+            surfaceVariant = Color(0xFF334155),
+            error = Color(0xFFEF4444)
+        ),
+        content = content
+    )
 }
