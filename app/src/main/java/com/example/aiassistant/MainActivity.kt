@@ -1,6 +1,7 @@
 package com.example.aiassistant
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -11,15 +12,44 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -79,7 +109,7 @@ fun VoicemailScreen(
     onStartService: () -> Unit,
     onRequestPermissions: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context: Context = LocalContext.current
     var contactName by remember { mutableStateOf("") }
     var contactNumber by remember { mutableStateOf("") }
     var selectedLanguageName by remember { mutableStateOf("English") }
@@ -147,13 +177,13 @@ fun VoicemailScreen(
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "Autonomous Voicemail Agent",
+                            text = "Autonomous Voicemail Agent",
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                         Text(
-                            "Automatically disconnects incoming calls and logs custom multilingual voicemails.",
+                            text = "Automatically disconnects incoming calls and logs custom multilingual voicemails.",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                         )
@@ -195,7 +225,7 @@ fun VoicemailScreen(
 
                         if (contactNumber.isNotBlank()) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Number: $contactNumber", fontSize = 13.sp, color = Color.Gray)
+                            Text("Number: $contactNumber", fontSize = 13.sp, color = Color(0xFF9E9E9E))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -256,7 +286,7 @@ fun VoicemailScreen(
 
             item {
                 Text(
-                    "Configured Contacts (${rulesList.size})",
+                    text = "Configured Contacts (${rulesList.size})",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -265,8 +295,8 @@ fun VoicemailScreen(
             if (rulesList.isEmpty()) {
                 item {
                     Text(
-                        "No custom rules set. Default language is English.",
-                        color = Color.Gray,
+                        text = "No custom rules set. Default language is English.",
+                        color = Color(0xFF9E9E9E),
                         fontSize = 13.sp
                     )
                 }
@@ -286,7 +316,7 @@ fun VoicemailScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(rule.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text(rule.number, fontSize = 13.sp, color = Color.Gray)
+                                Text(rule.number, fontSize = 13.sp, color = Color(0xFF9E9E9E))
                                 Spacer(modifier = Modifier.height(4.dp))
                                 AssistChip(
                                     onClick = {},
