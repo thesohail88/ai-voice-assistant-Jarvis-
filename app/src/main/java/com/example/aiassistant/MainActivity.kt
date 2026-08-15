@@ -1,78 +1,296 @@
 package com.example.aiassistant
 
 import android.Manifest
-import android.content.Context
+import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.ContactsContract
-import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.*
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
-class MainActivity : ComponentActivity() {
+class MainActivity : Activity() {
 
     private lateinit var languageManager: ContactLanguageManager
+    private val PICK_CONTACT_REQUEST = 1001
+    private val PERMISSION_REQUEST_CODE = 1002
+
+    private var selectedContactName: String = ""
+    private var selectedContactNumber: String = ""
+
+    private lateinit var contactDisplayTv: TextView
+    private lateinit var rulesContainer: LinearLayout
+    private lateinit var languageSpinner: Spinner
+
+    private val languages = listOf(
+        Pair("English", "en"),
+        Pair("Hindi", "hi"),
+        Pair("Spanish", "es"),
+        Pair("French", "fr"),
+        Pair("German", "de"),
+        Pair("Arabic", "ar"),
+        Pair("Mandarin", "zh")
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         languageManager = ContactLanguageManager(this)
 
-        setContent {
-            VoicemailManagerTheme {
-                VoicemailScreen(
-                    languageManager = languageManager,
-                    onStartService = { startAssistantService() },
-                    onRequestPermissions = { requestAppPermissions() }
+        // Root layout
+        val rootScrollView = ScrollView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            setBackgroundColor(Color.parseColor("#0F172A")) // Dark theme slate
+            isFillViewport = true
+        }
+
+        val mainLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(16), dpToPx(24), dpToPx(16), dpToPx(24))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        // Header Title
+        val titleTv = TextView(this).apply {
+            text = "AI Voice Assistant & Voicemail"
+            textSize = 22f
+            setTextColor(Color.parseColor("#F8FAFC"))
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        mainLayout.addView(titleTv)
+
+        val subTitleTv = TextView(this).apply {
+            text = "Autonomous voicemail agent & 24/7 smart assistant"
+            textSize = 13f
+            setTextColor(Color.parseColor("#94A3B8"))
+            setPadding(0, dpToPx(4), 0, dpToPx(16))
+        }
+        mainLayout.addView(subTitleTv)
+
+        // Top Action Card
+        val actionCard = createCardLayout()
+        val actionCardLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+        }
+
+        val cardTitle = TextView(this).apply {
+            text = "Service Controls"
+            textSize = 16f
+            setTextColor(Color.parseColor("#38BDF8"))
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        actionCardLayout.addView(cardTitle)
+
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dpToPx(12), 0, 0)
+        }
+
+        val startBtn = createStyledButton("Start Service", "#0284C7") {
+            startAssistantService()
+        }
+        val permBtn = createStyledButton("Permissions", "#334155") {
+            requestAppPermissions()
+        }
+
+        btnRow.addView(startBtn, LinearLayout.LayoutParams(0, dpToPx(46), 1f).apply { marginEnd = dpToPx(8) })
+        btnRow.addView(permBtn, LinearLayout.LayoutParams(0, dpToPx(46), 1f))
+        actionCardLayout.addView(btnRow)
+        actionCard.addView(actionCardLayout)
+        mainLayout.addView(actionCard)
+
+        addSpacer(mainLayout, 16)
+
+        // Contact Voicemail Configuration Card
+        val configCard = createCardLayout()
+        val configLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+        }
+
+        val configHeader = TextView(this).apply {
+            text = "Configure Contact Voicemail"
+            textSize = 16f
+            setTextColor(Color.parseColor("#F8FAFC"))
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        configLayout.addView(configHeader)
+
+        addSpacer(configLayout, 12)
+
+        val pickContactBtn = createStyledButton("👤 Choose Contact from Phone", "#1E293B") {
+            val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+            startActivityForResult(intent, PICK_CONTACT_REQUEST)
+        }
+        configLayout.addView(pickContactBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(46)))
+
+        contactDisplayTv = TextView(this).apply {
+            text = "No contact selected"
+            textSize = 13f
+            setTextColor(Color.parseColor("#94A3B8"))
+            setPadding(0, dpToPx(8), 0, dpToPx(12))
+        }
+        configLayout.addView(contactDisplayTv)
+
+        val langLabel = TextView(this).apply {
+            text = "Select Voicemail Language:"
+            textSize = 13f
+            setTextColor(Color.parseColor("#E2E8F0"))
+        }
+        configLayout.addView(langLabel)
+
+        languageSpinner = Spinner(this).apply {
+            val adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, languages.map { it.first })
+            this.adapter = adapter
+            background = createRoundedDrawable("#1E293B", "#475569")
+            setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
+        }
+        configLayout.addView(languageSpinner, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48)).apply { topMargin = dpToPx(6) })
+
+        addSpacer(configLayout, 14)
+
+        val saveRuleBtn = createStyledButton("Save Voicemail Rule", "#0284C7") {
+            if (selectedContactNumber.isNotBlank()) {
+                val selectedLang = languages[languageSpinner.selectedItemPosition]
+                languageManager.saveContactRule(
+                    selectedContactNumber,
+                    if (selectedContactName.isBlank()) selectedContactNumber else selectedContactName,
+                    selectedLang.first,
+                    selectedLang.second
                 )
+                Toast.makeText(this, "Rule saved for $selectedContactName", Toast.LENGTH_SHORT).show()
+                selectedContactName = ""
+                selectedContactNumber = ""
+                contactDisplayTv.text = "No contact selected"
+                refreshRulesList()
+            } else {
+                Toast.makeText(this, "Please choose a contact first", Toast.LENGTH_SHORT).show()
+            }
+        }
+        configLayout.addView(saveRuleBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(46)))
+
+        configCard.addView(configLayout)
+        mainLayout.addView(configCard)
+
+        addSpacer(mainLayout, 20)
+
+        // Saved Rules Header
+        val rulesHeader = TextView(this).apply {
+            text = "Configured Contacts"
+            textSize = 16f
+            setTextColor(Color.parseColor("#F8FAFC"))
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        mainLayout.addView(rulesHeader)
+
+        addSpacer(mainLayout, 8)
+
+        rulesContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        mainLayout.addView(rulesContainer)
+
+        rootScrollView.addView(mainLayout)
+        setContentView(rootScrollView)
+
+        refreshRulesList()
+    }
+
+    private fun refreshRulesList() {
+        rulesContainer.removeAllViews()
+        val rules = languageManager.getAllRules()
+
+        if (rules.isEmpty()) {
+            val emptyTv = TextView(this).apply {
+                text = "No custom rules set. All calls default to English voicemail."
+                textSize = 13f
+                setTextColor(Color.parseColor("#64748B"))
+                setPadding(0, dpToPx(8), 0, 0)
+            }
+            rulesContainer.addView(emptyTv)
+            return
+        }
+
+        for (rule in rules) {
+            val ruleCard = createCardLayout()
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
+                gravity = Gravity.CENTER_VERTICAL
+            }
+
+            val textInfo = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+
+            val nameTv = TextView(this).apply {
+                text = rule.name
+                textSize = 15f
+                setTextColor(Color.parseColor("#F8FAFC"))
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+            }
+            val detailsTv = TextView(this).apply {
+                text = "${rule.number} • ${rule.languageName}"
+                textSize = 12f
+                setTextColor(Color.parseColor("#38BDF8"))
+            }
+
+            textInfo.addView(nameTv)
+            textInfo.addView(detailsTv)
+            row.addView(textInfo)
+
+            val deleteBtn = Button(this).apply {
+                text = "Delete"
+                textSize = 12f
+                setTextColor(Color.parseColor("#EF4444"))
+                background = createRoundedDrawable("#334155", "#EF4444")
+                setOnClickListener {
+                    languageManager.removeContactRule(rule.number)
+                    refreshRulesList()
+                }
+            }
+            row.addView(deleteBtn, LinearLayout.LayoutParams(dpToPx(80), dpToPx(38)))
+            ruleCard.addView(row)
+            rulesContainer.addView(ruleCard)
+            addSpacer(rulesContainer, 8)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_CONTACT_REQUEST && resultCode == RESULT_OK) {
+            val contactUri: Uri? = data?.data
+            if (contactUri != null) {
+                val cursor = contentResolver.query(
+                    contactUri,
+                    arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER),
+                    null, null, null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        selectedContactName = it.getString(0) ?: "Contact"
+                        selectedContactNumber = it.getString(1) ?: ""
+                        contactDisplayTv.text = "Selected: $selectedContactName ($selectedContactNumber)"
+                        contactDisplayTv.setTextColor(Color.parseColor("#38BDF8"))
+                    }
+                }
             }
         }
     }
@@ -98,263 +316,50 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-        requestPermissions(permissions.toTypedArray(), 101)
+        ActivityCompat.requestPermissions(this, permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
     }
-}
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun VoicemailScreen(
-    languageManager: ContactLanguageManager,
-    onStartService: () -> Unit,
-    onRequestPermissions: () -> Unit
-) {
-    val context: Context = LocalContext.current
-    var contactName by remember { mutableStateOf("") }
-    var contactNumber by remember { mutableStateOf("") }
-    var selectedLanguageName by remember { mutableStateOf("English") }
-    var selectedLanguageCode by remember { mutableStateOf("en") }
-    var expandedDropdown by remember { mutableStateOf(false) }
-
-    var rulesList by remember { mutableStateOf(languageManager.getAllRules()) }
-
-    val languages = listOf(
-        Pair("English", "en"),
-        Pair("Hindi", "hi"),
-        Pair("Spanish", "es"),
-        Pair("French", "fr"),
-        Pair("German", "de"),
-        Pair("Arabic", "ar"),
-        Pair("Mandarin", "zh")
-    )
-
-    val contactPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val uri: Uri? = result.data?.data
-        if (uri != null) {
-            val cursor = context.contentResolver.query(
-                uri,
-                arrayOf(
-                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                    ContactsContract.CommonDataKinds.Phone.NUMBER
-                ),
-                null,
-                null,
-                null
+    private fun createCardLayout(): FrameLayout {
+        return FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    contactName = it.getString(0) ?: "Unknown"
-                    contactNumber = it.getString(1) ?: ""
-                }
-            }
+            background = createRoundedDrawable("#1E293B", "#334155")
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("AI Assistant & Voicemail", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
-        }
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Autonomous Voicemail Agent",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = "Automatically disconnects incoming calls and logs custom multilingual voicemails.",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onStartService) {
-                                Text("Start Service")
-                            }
-                            OutlinedButton(onClick = onRequestPermissions) {
-                                Text("Permissions")
-                            }
-                        }
-                    }
-                }
-            }
-
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Configure Contact Voicemail", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
-                                contactPickerLauncher.launch(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.Person, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(if (contactName.isBlank()) "Choose Contact from Phone" else "Contact: $contactName")
-                        }
-
-                        if (contactNumber.isNotBlank()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text("Number: $contactNumber", fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF9E9E9E))
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        ExposedDropdownMenuBox(
-                            expanded = expandedDropdown,
-                            onExpandedChange = { expandedDropdown = !expandedDropdown }
-                        ) {
-                            OutlinedTextField(
-                                value = selectedLanguageName,
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Voicemail Language") },
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            ExposedDropdownMenu(
-                                expanded = expandedDropdown,
-                                onDismissRequest = { expandedDropdown = false }
-                            ) {
-                                languages.forEach { (langName, langCode) ->
-                                    DropdownMenuItem(
-                                        text = { Text(langName) },
-                                        onClick = {
-                                            selectedLanguageName = langName
-                                            selectedLanguageCode = langCode
-                                            expandedDropdown = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Button(
-                            onClick = {
-                                if (contactNumber.isNotBlank()) {
-                                    languageManager.saveContactRule(
-                                        contactNumber,
-                                        if (contactName.isBlank()) contactNumber else contactName,
-                                        selectedLanguageName,
-                                        selectedLanguageCode
-                                    )
-                                    rulesList = languageManager.getAllRules()
-                                    contactName = ""
-                                    contactNumber = ""
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = contactNumber.isNotBlank()
-                        ) {
-                            Text("Save Voicemail Rule")
-                        }
-                    }
-                }
-            }
-
-            item {
-                Text(
-                    text = "Configured Contacts (${rulesList.size})",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            if (rulesList.isEmpty()) {
-                item {
-                    Text(
-                        text = "No custom rules set. Default language is English.",
-                        color = androidx.compose.ui.graphics.Color(0xFF9E9E9E),
-                        fontSize = 13.sp
-                    )
-                }
-            } else {
-                items(rulesList) { rule ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(14.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(rule.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text(rule.number, fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF9E9E9E))
-                                Spacer(modifier = Modifier.height(4.dp))
-                                AssistChip(
-                                    onClick = {},
-                                    label = { Text("Language: ${rule.languageName}") }
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    languageManager.removeContactRule(rule.number)
-                                    rulesList = languageManager.getAllRules()
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Default.Delete,
-                                    contentDescription = "Remove Rule",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+    private fun createStyledButton(label: String, bgColor: String, onClick: () -> Unit): Button {
+        return Button(this).apply {
+            text = label
+            isAllCaps = false
+            setTextColor(Color.WHITE)
+            background = createRoundedDrawable(bgColor, bgColor)
+            setOnClickListener { onClick() }
         }
     }
-}
 
-@Composable
-fun VoicemailManagerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = androidx.compose.ui.graphics.Color(0xFF38BDF8),
-            onPrimary = androidx.compose.ui.graphics.Color(0xFF0F172A),
-            primaryContainer = androidx.compose.ui.graphics.Color(0xFF0369A1),
-            onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFFF0F9FF),
-            surface = androidx.compose.ui.graphics.Color(0xFF1E293B),
-            surfaceVariant = androidx.compose.ui.graphics.Color(0xFF334155),
-            error = androidx.compose.ui.graphics.Color(0xFFEF4444)
-        ),
-        content = content
-    )
+    private fun createRoundedDrawable(fillColor: String, strokeColor: String): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dpToPx(10).toFloat()
+            setColor(Color.parseColor(fillColor))
+            setStroke(dpToPx(1), Color.parseColor(strokeColor))
+        }
+    }
+
+    private fun addSpacer(parent: LinearLayout, dp: Int) {
+        val space = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(dp))
+        }
+        parent.addView(space)
+    }
+
+    private fun dpToPx(dp: Int): Int {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp.toFloat(),
+            resources.displayMetrics
+        ).toInt()
+    }
 }
