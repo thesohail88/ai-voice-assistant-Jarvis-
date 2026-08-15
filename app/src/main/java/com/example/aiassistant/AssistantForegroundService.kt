@@ -1,21 +1,24 @@
 package com.example.aiassistant
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
-import android.media.ToneGenerator
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class AssistantForegroundService : Service() {
@@ -25,9 +28,8 @@ class AssistantForegroundService : Service() {
     private lateinit var audioManager: AudioManager
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var toneGenerator: ToneGenerator? = null
 
-    // ⚠️ REPLACE WITH YOUR ACTUAL GOOGLE AI STUDIO KEY
+    // ⚠️ Replace with your actual Gemini API Key from Google AI Studio
     private val apiKey = "AQ.Ab8RN6LGTH90nHMefG8sOBoVQi3FEo70G9rIYIgGni-lXwSbBg"
     private lateinit var geminiClient: GeminiClient
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -38,7 +40,6 @@ class AssistantForegroundService : Service() {
         deviceController = DeviceController(this)
         geminiClient = GeminiClient(apiKey)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        toneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIAssistant::HardwareMicWakeLock").apply {
@@ -46,23 +47,23 @@ class AssistantForegroundService : Service() {
         }
 
         startForeground(1001, createNotification())
-        startHardwareListening()
+
+        serviceScope.launch {
+            delay(1500)
+            voiceManager.speak("Assistant online and listening.", AssistantPersona.JARVIS)
+            startHardwareListening()
+        }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
     }
 
     private fun startHardwareListening() {
-        if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isBlank()) {
+        continuousRecorder?.stopListening()
+        continuousRecorder = ContinuousAudioRecorder { wavAudioChunk ->
             serviceScope.launch {
-                voiceManager.speak("Warning: Gemini API Key is not set.", AssistantPersona.JARVIS)
-            }
-            return
-        }
-
-        continuousRecorder = ContinuousAudioRecorder { pcmAudioChunk ->
-            // Beep to confirm speech activity was captured
-            toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 100)
-
-            serviceScope.launch {
-                val (persona, reply) = geminiClient.processVoiceAudio(pcmAudioChunk)
+                val (persona, reply) = geminiClient.processVoiceAudio(wavAudioChunk)
 
                 if (persona != null && reply != null) {
                     Toast.makeText(applicationContext, "${persona.name}: $reply", Toast.LENGTH_SHORT).show()
@@ -77,6 +78,26 @@ class AssistantForegroundService : Service() {
         continuousRecorder?.startListening()
     }
 
+    /**
+     * Prevents Android from killing the assistant when the app is swiped away from Recents
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val restartServiceIntent = Intent(applicationContext, AssistantForegroundService::class.java).also {
+            it.setPackage(packageName)
+        }
+        val restartServicePendingIntent = PendingIntent.getService(
+            this, 1, restartServiceIntent,
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmService = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmService.set(
+            AlarmManager.ELAPSED_REALTIME,
+            SystemClock.elapsedRealtime() + 1000,
+            restartServicePendingIntent
+        )
+        super.onTaskRemoved(rootIntent)
+    }
+
     private fun createNotification(): Notification {
         val channelId = "assistant_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -89,15 +110,15 @@ class AssistantForegroundService : Service() {
         }
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Jarvis & Friday Listening")
-            .setContentText("Hardware mic active. Say 'Jarvis' or 'Friday'...")
+            .setContentTitle("Jarvis & Friday Active")
+            .setContentText("Listening 24/7 in the background...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setOngoing(true)
             .build()
     }
 
     override fun onDestroy() {
         continuousRecorder?.stopListening()
-        toneGenerator?.release()
         if (wakeLock?.isHeld == true) wakeLock?.release()
         voiceManager.shutdown()
         super.onDestroy()
