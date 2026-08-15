@@ -11,11 +11,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-enum class AssistantPersona {
-    JARVIS,
-    FRIDAY
-}
-
 data class ApiKeyConfig(
     val groqKey: String,
     val geminiKey: String,
@@ -38,7 +33,6 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
             return@withContext Pair(null, null)
         }
 
-        // Package raw PCM into a standard 44-byte RIFF WAV container
         val wavData = if (isWavHeaderPresent(pcmOrWavBytes)) {
             pcmOrWavBytes
         } else {
