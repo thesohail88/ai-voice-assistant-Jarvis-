@@ -12,6 +12,8 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
+import android.telephony.SmsManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +29,6 @@ class AssistantForegroundService : Service() {
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // Pre-configured API keys for multi-engine failover
     private val keyConfig = ApiKeyConfig(
         groqKey = "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",
         geminiKey = "AQ.Ab8RN6LNWwcJsFDXsOj9dzu7talXI8TmKFQDtgDXisvtqZoQhA",
@@ -69,9 +70,40 @@ class AssistantForegroundService : Service() {
 
     private fun handleUnansweredCallVoicemail(callerNumber: String, languageCode: String) {
         serviceScope.launch {
-            val prompt = "Generate a concise 1-sentence confirmation stating an unanswered or busy call from $callerNumber was routed to voicemail in language code $languageCode."
-            val reply = aiRouter.queryAssistant(prompt, AssistantPersona.JARVIS, assistantMemory)
-            voiceManager.speak(reply, AssistantPersona.JARVIS, languageCode)
+            // 1. Generate the voicemail message for the caller in their preferred language
+            val callerPrompt = "Generate a polite, natural 1-2 sentence automated voicemail message to a caller explaining that I missed their call or my line is busy, and asking them to reply with their message. Respond strictly in language code: $languageCode."
+            val voicemailTextForCaller = aiRouter.queryAssistant(callerPrompt, AssistantPersona.JARVIS, assistantMemory)
+
+            // 2. Dispatch the voicemail to the caller via SMS
+            val smsSent = sendSmsToCaller(callerNumber, voicemailTextForCaller)
+
+            // 3. Announce status to you through the speaker
+            val confirmationMsg = if (smsSent) {
+                "Sir, an unanswered call from $callerNumber was registered. I have sent an automated voicemail message in their preferred language."
+            } else {
+                "Sir, missed call from $callerNumber logged. However, SMS dispatch failed."
+            }
+            voiceManager.speak(confirmationMsg, AssistantPersona.JARVIS)
+        }
+    }
+
+    private fun sendSmsToCaller(phoneNumber: String, message: String): Boolean {
+        if (phoneNumber.isBlank() || phoneNumber == "Unknown Caller") return false
+        return try {
+            val smsManager: SmsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                applicationContext.getSystemService(SmsManager::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                SmsManager.getDefault()
+            }
+            
+            val parts = smsManager.divideMessage(message)
+            smsManager.sendMultipartTextMessage(phoneNumber, null, parts, null, null)
+            Log.d("VoicemailService", "Voicemail SMS sent to $phoneNumber")
+            true
+        } catch (e: Exception) {
+            Log.e("VoicemailService", "Failed to send SMS to $phoneNumber", e)
+            false
         }
     }
 
