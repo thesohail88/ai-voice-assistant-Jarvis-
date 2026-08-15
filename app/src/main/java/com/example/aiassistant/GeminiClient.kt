@@ -19,7 +19,8 @@ class GeminiClient(private val apiKey: String) {
         .readTimeout(25, TimeUnit.SECONDS)
         .build()
 
-    private val endpointUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    // Updated to the universally available Gemini 2.0 Flash endpoint
+    private val endpointUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
     suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
