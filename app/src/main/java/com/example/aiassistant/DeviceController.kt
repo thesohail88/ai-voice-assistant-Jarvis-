@@ -17,7 +17,6 @@ class DeviceController(private val context: Context) {
         val lower = text.lowercase().trim()
 
         return when {
-            // Flashlight Control
             lower.contains("flashlight on") || lower.contains("torch on") -> {
                 toggleFlashlight(true)
                 true
@@ -26,8 +25,6 @@ class DeviceController(private val context: Context) {
                 toggleFlashlight(false)
                 true
             }
-
-            // Direct Phone Call
             lower.startsWith("call ") || lower.startsWith("dial ") || lower.startsWith("phone ") -> {
                 val rawNumber = lower.replace("call", "")
                     .replace("dial", "")
@@ -36,8 +33,6 @@ class DeviceController(private val context: Context) {
                 makeDirectPhoneCall(rawNumber)
                 true
             }
-
-            // Specific App Launchers
             lower.contains("open youtube") -> {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:")).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -59,14 +54,10 @@ class DeviceController(private val context: Context) {
                 context.startActivity(intent)
                 true
             }
-
-            // Generic "Open [App Name]" Handler
             lower.startsWith("open ") || lower.startsWith("launch ") -> {
                 val appName = lower.removePrefix("open ").removePrefix("launch ").trim()
                 launchAppByName(appName)
             }
-
-            // Web / Google Search
             lower.startsWith("search for ") || lower.startsWith("google ") -> {
                 val query = lower.replace("search for ", "").replace("google ", "").trim()
                 val intent = Intent(Intent.ACTION_WEB_SEARCH).apply {
@@ -76,8 +67,6 @@ class DeviceController(private val context: Context) {
                 context.startActivity(intent)
                 true
             }
-
-            // Timer & Alarm Handlers
             lower.startsWith("set timer for") -> {
                 val seconds = parseTimerDurationInSeconds(lower)
                 val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
@@ -89,7 +78,6 @@ class DeviceController(private val context: Context) {
                 context.startActivity(intent)
                 true
             }
-
             else -> false
         }
     }
