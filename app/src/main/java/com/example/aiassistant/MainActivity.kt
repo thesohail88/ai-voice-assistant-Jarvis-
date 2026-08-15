@@ -22,6 +22,7 @@ import androidx.core.app.ActivityCompat
 class MainActivity : Activity() {
 
     private lateinit var languageManager: ContactLanguageManager
+    private lateinit var voiceManager: VoiceManager
     private val PICK_CONTACT_REQUEST = 1001
     private val PERMISSION_REQUEST_CODE = 1002
 
@@ -47,6 +48,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         languageManager = ContactLanguageManager(this)
+        voiceManager = VoiceManager(this)
 
         val rootScrollView = ScrollView(this).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -124,6 +126,41 @@ class MainActivity : Activity() {
         telemetryLayout.addView(btnRow)
         telemetryCard.addView(telemetryLayout)
         mainLayout.addView(telemetryCard)
+        mainLayout.addView(createSpacer(16))
+
+        // --- Voice Calibration & Audio Samples Section ---
+        mainLayout.addView(TextView(this).apply {
+            text = "VOICE DIAGNOSTICS & SAMPLES"
+            textSize = 12f
+            setTextColor(Color.parseColor("#00F0FF"))
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        mainLayout.addView(createSpacer(8))
+
+        val sampleCard = createGlassCard("#0EA5E9", "#081326")
+        val sampleLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+        }
+        sampleLayout.addView(TextView(this).apply {
+            text = "Tap a persona to test vocal synthesis & DSP curves:"
+            textSize = 11f
+            setTextColor(Color.parseColor("#94A3B8"))
+        })
+        sampleLayout.addView(createSpacer(10))
+
+        val sampleBtnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val jarvisSampleBtn = createNeonBtn("🎙️ JARVIS SAMPLE", "#0369A1", "#38BDF8") {
+            voiceManager.speak("At your service, sir. All systems calibrated, though I cannot vouch for your plans.", AssistantPersona.JARVIS)
+        }
+        val fridaySampleBtn = createNeonBtn("🎙️ FRIDAY SAMPLE", "#4338CA", "#818CF8") {
+            voiceManager.speak("Systems online, boss. Ready when you are, though let's keep the damage minimal this time.", AssistantPersona.FRIDAY)
+        }
+        sampleBtnRow.addView(jarvisSampleBtn, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(8) })
+        sampleBtnRow.addView(fridaySampleBtn, LinearLayout.LayoutParams(0, dp(42), 1f))
+        sampleLayout.addView(sampleBtnRow)
+        sampleCard.addView(sampleLayout)
+        mainLayout.addView(sampleCard)
         mainLayout.addView(createSpacer(16))
 
         // Voicemail & SMS Switch Card
@@ -377,5 +414,10 @@ class MainActivity : Activity() {
 
     private fun dp(dpVal: Int): Int {
         return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dpVal.toFloat(), resources.displayMetrics).toInt()
+    }
+
+    override fun onDestroy() {
+        voiceManager.shutdown()
+        super.onDestroy()
     }
 }
