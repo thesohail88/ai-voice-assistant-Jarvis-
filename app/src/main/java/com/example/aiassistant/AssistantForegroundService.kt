@@ -8,7 +8,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -25,23 +24,26 @@ class AssistantForegroundService : Service() {
 
     private lateinit var voiceManager: VoiceManager
     private lateinit var deviceController: DeviceController
-    private lateinit var languageManager: ContactLanguageManager
-    private lateinit var audioManager: AudioManager
+    private lateinit var assistantMemory: AssistantMemory
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // ⚠️ Paste your actual Groq key starting with gsk_
-    private val apiKey = "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"
-    private lateinit var groqClient: GroqClient
+    // Configure your API keys here
+    private val keyConfig = ApiKeyConfig(
+        groqKey = "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",           // Starts with gsk_...
+        geminiKey = "AQ.Ab8RN6LNWwcJsFDXsOj9dzu7talXI8TmKFQDtgDXisvtqZoQhA",       // From Google AI Studio
+        openRouterKey = "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"     // Optional: sk-or-...
+    )
+
+    private lateinit var aiRouter: UnifiedAiRouter
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
         voiceManager = VoiceManager(this)
         deviceController = DeviceController(this)
-        languageManager = ContactLanguageManager(this)
-        groqClient = GroqClient(apiKey)
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        assistantMemory = AssistantMemory(this)
+        aiRouter = UnifiedAiRouter(keyConfig)
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIAssistant::HardwareMicWakeLock").apply {
@@ -52,15 +54,16 @@ class AssistantForegroundService : Service() {
 
         serviceScope.launch {
             delay(1500)
-            voiceManager.speak("Systems operational. Ready on Groq engine.", AssistantPersona.JARVIS)
+            voiceManager.speak("Systems operational. Ready on multi-engine stack.", AssistantPersona.JARVIS)
             startHardwareListening()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.getBooleanExtra("ACTION_CALL_ANSWERED", false) == true) {
-            val callerNumber = intent.getStringExtra("CALLER_NUMBER") ?: "Caller"
-            handleAutoAnsweredCall(callerNumber)
+        if (intent?.getBooleanExtra("ACTION_VOICEMAIL_LOGGED", false) == true) {
+            val callerNumber = intent.getStringExtra("CALLER_NUMBER") ?: "Unknown"
+            val languageCode = intent.getStringExtra("LANGUAGE_CODE") ?: "en"
+            handleVoicemailTrigger(callerNumber, languageCode)
         }
         return START_STICKY
     }
@@ -69,7 +72,7 @@ class AssistantForegroundService : Service() {
         continuousRecorder?.stopListening()
         continuousRecorder = ContinuousAudioRecorder { wavAudioChunk ->
             serviceScope.launch {
-                val (persona, reply) = groqClient.processVoiceAudio(wavAudioChunk) { heardText ->
+                val (persona, reply) = aiRouter.processVoiceAudio(wavAudioChunk, assistantMemory) { heardText ->
                     serviceScope.launch(Dispatchers.Main) {
                         Toast.makeText(applicationContext, "Heard: \"$heardText\"", Toast.LENGTH_SHORT).show()
                     }
@@ -85,17 +88,11 @@ class AssistantForegroundService : Service() {
         continuousRecorder?.startListening()
     }
 
-    private fun handleAutoAnsweredCall(callerNumber: String) {
+    private fun handleVoicemailTrigger(callerNumber: String, languageCode: String) {
         serviceScope.launch {
-            delay(1000)
-            audioManager.mode = AudioManager.MODE_IN_CALL
-            audioManager.isSpeakerphoneOn = true
-
-            val targetLanguage = languageManager.getLanguageForContact(callerNumber)
-            val prompt = "Generate a short polite call screening greeting stating the owner is away. Language code: $targetLanguage."
-            val greeting = groqClient.queryAssistant(prompt, AssistantPersona.JARVIS)
-
-            voiceManager.speak(greeting, AssistantPersona.JARVIS, targetLanguage)
+            val prompt = "Confirm in 1 short sentence that an incoming call from $callerNumber was disconnected and sent to voicemail in language code $languageCode."
+            val reply = aiRouter.queryAssistant(prompt, AssistantPersona.JARVIS, assistantMemory)
+            voiceManager.speak(reply, AssistantPersona.JARVIS, languageCode)
         }
     }
 
