@@ -23,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -40,10 +41,7 @@ class MainActivity : ComponentActivity() {
                 VoicemailScreen(
                     languageManager = languageManager,
                     onStartService = { startAssistantService() },
-                    onRequestPermissions = { requestAppPermissions() },
-                    onPickContact = { launcher ->
-                        launcher.launch(Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI))
-                    }
+                    onRequestPermissions = { requestAppPermissions() }
                 )
             }
         }
@@ -79,9 +77,9 @@ class MainActivity : ComponentActivity() {
 fun VoicemailScreen(
     languageManager: ContactLanguageManager,
     onStartService: () -> Unit,
-    onRequestPermissions: () -> Unit,
-    onPickContact: (androidx.activity.result.ActivityResultLauncher<Intent>) -> Unit
+    onRequestPermissions: () -> Unit
 ) {
+    val context = LocalContext.current
     var contactName by remember { mutableStateOf("") }
     var contactNumber by remember { mutableStateOf("") }
     var selectedLanguageName by remember { mutableStateOf("English") }
@@ -105,14 +103,16 @@ fun VoicemailScreen(
     ) { result ->
         val uri: Uri? = result.data?.data
         if (uri != null) {
-            val cursor = languageManager.let {
-                androidx.compose.ui.platform.LocalContext.currentOrNull?.contentResolver?.query(
-                    uri, arrayOf(
-                        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-                        ContactsContract.CommonDataKinds.Phone.NUMBER
-                    ), null, null, null
-                )
-            }
+            val cursor = context.contentResolver.query(
+                uri,
+                arrayOf(
+                    ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER
+                ),
+                null,
+                null,
+                null
+            )
             cursor?.use {
                 if (it.moveToFirst()) {
                     contactName = it.getString(0) ?: "Unknown"
@@ -181,7 +181,10 @@ fun VoicemailScreen(
                         Spacer(modifier = Modifier.height(12.dp))
 
                         Button(
-                            onClick = { onPickContact(contactPickerLauncher) },
+                            onClick = {
+                                val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
+                                contactPickerLauncher.launch(intent)
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp)
                         ) {
@@ -207,7 +210,7 @@ fun VoicemailScreen(
                                 readOnly = true,
                                 label = { Text("Voicemail Language") },
                                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
-                                modifier = Modifier.menuAnchor().fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth()
                             )
                             ExposedDropdownMenu(
                                 expanded = expandedDropdown,
