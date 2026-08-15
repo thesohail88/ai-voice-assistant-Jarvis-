@@ -22,10 +22,11 @@ class AssistantForegroundService : Service() {
     private lateinit var voiceManager: VoiceManager
     private lateinit var deviceController: DeviceController
     private lateinit var speakerVerifier: SpeakerVerifier
+    private lateinit var languageManager: ContactLanguageManager
     private lateinit var audioManager: AudioManager
     private var wakeLock: PowerManager.WakeLock? = null
 
-    private val geminiClient = GeminiClient("AQ.Ab8RN6L9MCXJyQQ1f7B5chjOG7tWZ-nX2Omvu4bpeyq5BQY_rw")
+    private val geminiClient = GeminiClient("AQ.Ab8RN6LGTH90nHMefG8sOBoVQi3FEo70G9rIYIgGni-lXwSbBg")
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
@@ -33,6 +34,7 @@ class AssistantForegroundService : Service() {
         voiceManager = VoiceManager(this)
         deviceController = DeviceController(this)
         speakerVerifier = SpeakerVerifier(this)
+        languageManager = ContactLanguageManager(this)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -53,14 +55,39 @@ class AssistantForegroundService : Service() {
 
     private fun handleAutoAnsweredCall(callerNumber: String) {
         serviceScope.launch {
-            // Enable in-call speakerphone so caller and AI can hear each other
             delay(1000)
             audioManager.mode = AudioManager.MODE_IN_CALL
             audioManager.isSpeakerphoneOn = true
 
-            // Default greeting persona for screening
-            val greeting = "Hello. You have reached the personal AI assistant for this line. My owner is currently unavailable. Please state your name and the purpose of your call."
-            voiceManager.speak(greeting, AssistantPersona.JARVIS)
+            // Look up specific language for this contact
+            val targetLanguage = languageManager.getLanguageForContact(callerNumber)
+
+            val prompt = "Generate a short greeting answering the phone for an unavailable owner in language code $targetLanguage. State you are taking a message."
+            val greeting = geminiClient.queryAssistant(prompt, AssistantPersona.JARVIS)
+
+            voiceManager.speak(greeting, AssistantPersona.JARVIS, targetLanguage)
+        }
+    }
+
+    fun handleIncomingVoice(
+        persona: AssistantPersona,
+        spokenText: String,
+        voiceEmbedding: FloatArray?
+    ) {
+        if (voiceEmbedding != null && !speakerVerifier.isAuthorizedUser(voiceEmbedding)) {
+            return
+        }
+
+        val wasDeviceAction = deviceController.handleActionCommand(spokenText)
+        if (wasDeviceAction) {
+            val confirm = if (persona == AssistantPersona.JARVIS) "Executing now, sir." else "Done."
+            voiceManager.speak(confirm, persona)
+            return
+        }
+
+        serviceScope.launch {
+            val reply = geminiClient.queryAssistant(spokenText, persona)
+            voiceManager.speak(reply, persona)
         }
     }
 
@@ -77,7 +104,7 @@ class AssistantForegroundService : Service() {
 
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Jarvis & Friday Active")
-            .setContentText("Call screening & background monitoring enabled...")
+            .setContentText("Multi-language call screener active...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .build()
     }
