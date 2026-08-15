@@ -18,6 +18,43 @@ class GeminiClient(private val apiKey: String) {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
+        val systemPrompt = if (persona == AssistantPersona.JARVIS) {
+            "You are Jarvis, Tony Stark's AI. Be concise, intelligent, and helpful."
+        } else {
+            "You are Friday, an efficient, direct female AI. Respond sharply and concisely."
+        }
+
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
+
+        val jsonPayload = JSONObject().apply {
+            put("system_instruction", JSONObject().put("parts", JSONObject().put("text", systemPrompt)))
+            put("contents", JSONArray().put(
+                JSONObject().put("parts", JSONArray().put(
+                    JSONObject().put("text", userPrompt)
+                ))
+            ))
+        }
+
+        val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder().url(url).post(body).build()
+
+        try {
+            val response = client.newCall(request).execute()
+            val rawJson = response.body?.string() ?: ""
+            val json = JSONObject(rawJson)
+            return@withContext json
+                .getJSONArray("candidates")
+                .getJSONObject(0)
+                .getJSONObject("content")
+                .getJSONArray("parts")
+                .getJSONObject(0)
+                .getString("text")
+        } catch (e: Exception) {
+            return@withContext "Apologies, I could not complete the request."
+        }
+    }
+
     suspend fun processVoiceAudio(pcmAudioBytes: ByteArray): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
         val base64Audio = Base64.encodeToString(pcmAudioBytes, Base64.NO_WRAP)
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
