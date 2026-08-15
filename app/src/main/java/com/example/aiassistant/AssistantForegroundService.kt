@@ -28,7 +28,6 @@ class AssistantForegroundService : Service() {
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // Configure your API keys here
     private val keyConfig = ApiKeyConfig(
         groqKey = "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",           // Starts with gsk_...
         geminiKey = "AQ.Ab8RN6LNWwcJsFDXsOj9dzu7talXI8TmKFQDtgDXisvtqZoQhA",       // From Google AI Studio
@@ -54,18 +53,28 @@ class AssistantForegroundService : Service() {
 
         serviceScope.launch {
             delay(1500)
-            voiceManager.speak("Systems operational. Ready on multi-engine stack.", AssistantPersona.JARVIS)
+            voiceManager.speak("Systems operational. AI Voicemail monitoring active.", AssistantPersona.JARVIS)
             startHardwareListening()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.getBooleanExtra("ACTION_VOICEMAIL_LOGGED", false) == true) {
-            val callerNumber = intent.getStringExtra("CALLER_NUMBER") ?: "Unknown"
+            val callerNumber = intent.getStringExtra("CALLER_NUMBER") ?: "Unknown Caller"
             val languageCode = intent.getStringExtra("LANGUAGE_CODE") ?: "en"
-            handleVoicemailTrigger(callerNumber, languageCode)
+            handleUnansweredCallVoicemail(callerNumber, languageCode)
         }
         return START_STICKY
+    }
+
+    private fun handleUnansweredCallVoicemail(callerNumber: String, languageCode: String) {
+        serviceScope.launch {
+            Toast.makeText(applicationContext, "Voicemail Triggered: $callerNumber ($languageCode)", Toast.LENGTH_LONG).show()
+
+            val prompt = "Generate a concise 1-sentence confirmation stating an unanswered or busy call from $callerNumber was routed to voicemail in language code $languageCode."
+            val reply = aiRouter.queryAssistant(prompt, AssistantPersona.JARVIS, assistantMemory)
+            voiceManager.speak(reply, AssistantPersona.JARVIS, languageCode)
+        }
     }
 
     private fun startHardwareListening() {
@@ -86,14 +95,6 @@ class AssistantForegroundService : Service() {
             }
         }
         continuousRecorder?.startListening()
-    }
-
-    private fun handleVoicemailTrigger(callerNumber: String, languageCode: String) {
-        serviceScope.launch {
-            val prompt = "Confirm in 1 short sentence that an incoming call from $callerNumber was disconnected and sent to voicemail in language code $languageCode."
-            val reply = aiRouter.queryAssistant(prompt, AssistantPersona.JARVIS, assistantMemory)
-            voiceManager.speak(reply, AssistantPersona.JARVIS, languageCode)
-        }
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -126,7 +127,7 @@ class AssistantForegroundService : Service() {
 
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Jarvis & Friday Active")
-            .setContentText("Listening 24/7 in background...")
+            .setContentText("Listening 24/7 & Monitoring Unanswered Calls...")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()
