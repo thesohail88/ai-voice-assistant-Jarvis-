@@ -1,6 +1,7 @@
 package com.example.aiassistant
 
 import android.util.Base64
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -14,34 +15,47 @@ import java.util.concurrent.TimeUnit
 class GeminiClient(private val apiKey: String) {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
         .build()
+
+    private val endpointUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     suspend fun queryAssistant(userPrompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
-            "You are Jarvis, Tony Stark's AI. Be concise, intelligent, and helpful."
+            "You are Jarvis, Tony Stark's AI assistant. Keep all responses direct, intelligent, and concise (1-2 sentences max)."
         } else {
-            "You are Friday, an efficient, direct female AI. Respond sharply and concisely."
+            "You are Friday, an efficient, direct female AI assistant. Respond sharply and concisely (1-2 sentences max)."
         }
 
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
-
         val jsonPayload = JSONObject().apply {
-            put("system_instruction", JSONObject().put("parts", JSONObject().put("text", systemPrompt)))
+            put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
             put("contents", JSONArray().put(
-                JSONObject().put("parts", JSONArray().put(
+                JSONObject().put("role", "user").put("parts", JSONArray().put(
                     JSONObject().put("text", userPrompt)
                 ))
             ))
         }
 
         val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
-        val request = Request.Builder().url(url).post(body).build()
+        
+        // Pass key via both header and query param for maximum compatibility across AI Studio key formats
+        val request = Request.Builder()
+            .url("$endpointUrl?key=$apiKey")
+            .addHeader("x-goog-api-key", apiKey)
+            .addHeader("Content-Type", "application/json")
+            .post(body)
+            .build()
 
         try {
             val response = client.newCall(request).execute()
             val rawJson = response.body?.string() ?: ""
+            
+            if (!response.isSuccessful) {
+                Log.e("GeminiClient", "API Error HTTP ${response.code}: $rawJson")
+                return@withContext "Apologies, the server responded with an error."
+            }
+
             val json = JSONObject(rawJson)
             return@withContext json
                 .getJSONArray("candidates")
@@ -50,42 +64,54 @@ class GeminiClient(private val apiKey: String) {
                 .getJSONArray("parts")
                 .getJSONObject(0)
                 .getString("text")
+                .trim()
         } catch (e: Exception) {
+            Log.e("GeminiClient", "Connection error", e)
             return@withContext "Apologies, I could not process that."
         }
     }
 
     suspend fun processVoiceAudio(wavAudioBytes: ByteArray): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
         val base64Audio = Base64.encodeToString(wavAudioBytes, Base64.NO_WRAP)
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
 
         val systemPrompt = """
-            Listen to this audio recording.
+            Listen to this audio recording:
             1. If the user calls or mentions 'Jarvis', respond starting with 'PERSONA:JARVIS|' followed by your answer.
             2. If the user calls or mentions 'Friday', respond starting with 'PERSONA:FRIDAY|' followed by your answer.
             3. If neither 'Jarvis' nor 'Friday' is called, reply ONLY with 'NO_WAKE_WORD'.
-            Keep all answers concise and direct.
+            Keep all answers concise (1-2 sentences).
         """.trimIndent()
 
-        val payload = JSONObject().apply {
-            put("system_instruction", JSONObject().put("parts", JSONObject().put("text", systemPrompt)))
+        val jsonPayload = JSONObject().apply {
+            put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", systemPrompt))))
             put("contents", JSONArray().put(
-                JSONObject().put("parts", JSONArray().apply {
-                    put(JSONObject().put("inline_data", JSONObject().apply {
-                        put("mime_type", "audio/wav")
+                JSONObject().put("role", "user").put("parts", JSONArray().apply {
+                    put(JSONObject().put("inlineData", JSONObject().apply {
+                        put("mimeType", "audio/wav")
                         put("data", base64Audio)
                     }))
-                    put(JSONObject().put("text", "Process audio command"))
+                    put(JSONObject().put("text", "Process this voice command"))
                 })
             ))
         }
 
-        val body = payload.toString().toRequestBody("application/json".toMediaType())
-        val request = Request.Builder().url(url).post(body).build()
+        val body = jsonPayload.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+            .url("$endpointUrl?key=$apiKey")
+            .addHeader("x-goog-api-key", apiKey)
+            .addHeader("Content-Type", "application/json")
+            .post(body)
+            .build()
 
         try {
             val response = client.newCall(request).execute()
             val rawJson = response.body?.string() ?: ""
+
+            if (!response.isSuccessful) {
+                Log.e("GeminiClient", "API Audio Error HTTP ${response.code}: $rawJson")
+                return@withContext Pair(null, null)
+            }
+
             val text = JSONObject(rawJson)
                 .getJSONArray("candidates")
                 .getJSONObject(0)
@@ -109,7 +135,7 @@ class GeminiClient(private val apiKey: String) {
                 else -> Pair(AssistantPersona.JARVIS, text)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("GeminiClient", "Audio connection error", e)
             return@withContext Pair(null, null)
         }
     }
