@@ -51,21 +51,20 @@ class GeminiClient(private val apiKey: String) {
                 .getJSONObject(0)
                 .getString("text")
         } catch (e: Exception) {
-            return@withContext "Apologies, I could not complete the request."
+            return@withContext "Apologies, I could not process that."
         }
     }
 
-    suspend fun processVoiceAudio(pcmAudioBytes: ByteArray): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
-        val base64Audio = Base64.encodeToString(pcmAudioBytes, Base64.NO_WRAP)
+    suspend fun processVoiceAudio(wavAudioBytes: ByteArray): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
+        val base64Audio = Base64.encodeToString(wavAudioBytes, Base64.NO_WRAP)
         val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
 
         val systemPrompt = """
-            You are a voice classifier and assistant. 
-            Analyze the attached audio:
-            1. If the user addressed 'Jarvis', start response with 'PERSONA:JARVIS|' followed by your reply.
-            2. If the user addressed 'Friday', start response with 'PERSONA:FRIDAY|' followed by your reply.
-            3. If neither wake word was spoken, respond ONLY with 'NO_WAKE_WORD'.
-            Keep responses concise and direct.
+            Listen to this audio recording.
+            1. If the user calls or mentions 'Jarvis', respond starting with 'PERSONA:JARVIS|' followed by your answer.
+            2. If the user calls or mentions 'Friday', respond starting with 'PERSONA:FRIDAY|' followed by your answer.
+            3. If neither 'Jarvis' nor 'Friday' is called, reply ONLY with 'NO_WAKE_WORD'.
+            Keep all answers concise and direct.
         """.trimIndent()
 
         val payload = JSONObject().apply {
@@ -73,10 +72,10 @@ class GeminiClient(private val apiKey: String) {
             put("contents", JSONArray().put(
                 JSONObject().put("parts", JSONArray().apply {
                     put(JSONObject().put("inline_data", JSONObject().apply {
-                        put("mime_type", "audio/pcm;rate=16000")
+                        put("mime_type", "audio/wav")
                         put("data", base64Audio)
                     }))
-                    put(JSONObject().put("text", "Process this voice command"))
+                    put(JSONObject().put("text", "Process audio command"))
                 })
             ))
         }
