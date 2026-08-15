@@ -225,7 +225,7 @@ fun VoicemailScreen(
 
                         if (contactNumber.isNotBlank()) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Number: $contactNumber", fontSize = 13.sp, color = Color(0xFF9E9E9E))
+                            Text("Number: $contactNumber", fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF9E9E9E))
                         }
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -296,7 +296,7 @@ fun VoicemailScreen(
                 item {
                     Text(
                         text = "No custom rules set. Default language is English.",
-                        color = Color(0xFF9E9E9E),
+                        color = androidx.compose.ui.graphics.Color(0xFF9E9E9E),
                         fontSize = 13.sp
                     )
                 }
@@ -316,7 +316,7 @@ fun VoicemailScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(rule.name, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                                Text(rule.number, fontSize = 13.sp, color = Color(0xFF9E9E9E))
+                                Text(rule.number, fontSize = 13.sp, color = androidx.compose.ui.graphics.Color(0xFF9E9E9E))
                                 Spacer(modifier = Modifier.height(4.dp))
                                 AssistChip(
                                     onClick = {},
@@ -347,13 +347,13 @@ fun VoicemailScreen(
 fun VoicemailManagerTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Color(0xFF38BDF8),
-            onPrimary = Color(0xFF0F172A),
-            primaryContainer = Color(0xFF0369A1),
-            onPrimaryContainer = Color(0xFFF0F9FF),
-            surface = Color(0xFF1E293B),
-            surfaceVariant = Color(0xFF334155),
-            error = Color(0xFFEF4444)
+            primary = androidx.compose.ui.graphics.Color(0xFF38BDF8),
+            onPrimary = androidx.compose.ui.graphics.Color(0xFF0F172A),
+            primaryContainer = androidx.compose.ui.graphics.Color(0xFF0369A1),
+            onPrimaryContainer = androidx.compose.ui.graphics.Color(0xFFF0F9FF),
+            surface = androidx.compose.ui.graphics.Color(0xFF1E293B),
+            surfaceVariant = androidx.compose.ui.graphics.Color(0xFF334155),
+            error = androidx.compose.ui.graphics.Color(0xFFEF4444)
         ),
         content = content
     )
