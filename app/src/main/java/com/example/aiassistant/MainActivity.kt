@@ -5,7 +5,10 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -27,178 +30,218 @@ class MainActivity : Activity() {
     private var selectedContactName: String = ""
     private var selectedContactNumber: String = ""
 
+    private lateinit var contactCardContent: LinearLayout
     private lateinit var contactDisplayTv: TextView
     private lateinit var rulesContainer: LinearLayout
     private lateinit var languageSpinner: Spinner
+    private lateinit var statusBadge: TextView
 
     private val languages = listOf(
-        Pair("English", "en"),
-        Pair("Hindi", "hi"),
-        Pair("Spanish", "es"),
-        Pair("French", "fr"),
-        Pair("German", "de"),
-        Pair("Arabic", "ar"),
-        Pair("Mandarin", "zh")
+        Pair("🌐 English (Default)", "en"),
+        Pair("🇮🇳 Hindi", "hi"),
+        Pair("🇪🇸 Spanish", "es"),
+        Pair("🇫🇷 French", "fr"),
+        Pair("🇩🇪 German", "de"),
+        Pair("🇸🇦 Arabic", "ar"),
+        Pair("🇨🇳 Mandarin", "zh")
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         languageManager = ContactLanguageManager(this)
 
-        // Root layout
+        // Root Background
         val rootScrollView = ScrollView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            setBackgroundColor(Color.parseColor("#0F172A")) // Dark theme slate
+            setBackgroundColor(Color.parseColor("#090D16")) // Ultra-deep Obsidian Navy
             isFillViewport = true
         }
 
         val mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(16), dpToPx(24), dpToPx(16), dpToPx(24))
+            setPadding(dpToPx(20), dpToPx(32), dpToPx(20), dpToPx(32))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
         }
 
-        // Header Title
-        val titleTv = TextView(this).apply {
-            text = "AI Voice Assistant & Voicemail"
-            textSize = 22f
-            setTextColor(Color.parseColor("#F8FAFC"))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        // Top Header Section with Glowing Subtitle
+        val headerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
         }
-        mainLayout.addView(titleTv)
+
+        val titleTv = TextView(this).apply {
+            text = "JARVIS CORE // AI"
+            textSize = 24f
+            setTextColor(Color.parseColor("#38BDF8")) // Neon Cyan
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD)
+            letterSpacing = 0.08f
+        }
+        headerLayout.addView(titleTv)
 
         val subTitleTv = TextView(this).apply {
-            text = "Autonomous voicemail agent & 24/7 smart assistant"
+            text = "Multimodal Autonomous Voicemail & Device Engine"
             textSize = 13f
-            setTextColor(Color.parseColor("#94A3B8"))
-            setPadding(0, dpToPx(4), 0, dpToPx(16))
+            setTextColor(Color.parseColor("#64748B"))
+            setPadding(0, dpToPx(4), 0, dpToPx(20))
         }
-        mainLayout.addView(subTitleTv)
+        headerLayout.addView(subTitleTv)
+        mainLayout.addView(headerLayout)
 
-        // Top Action Card
-        val actionCard = createCardLayout()
-        val actionCardLayout = LinearLayout(this).apply {
+        // --- 1. Service Status & Quick Control Card ---
+        val statusCard = createGlassCard("#00E5FF")
+        val statusCardLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+            setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18))
         }
 
-        val cardTitle = TextView(this).apply {
-            text = "Service Controls"
-            textSize = 16f
-            setTextColor(Color.parseColor("#38BDF8"))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        val statusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        actionCardLayout.addView(cardTitle)
+
+        val pulseIcon = View(this).apply {
+            background = createCircleDrawable("#00E676") // Neon Green Active Dot
+        }
+        statusRow.addView(pulseIcon, LinearLayout.LayoutParams(dpToPx(10), dpToPx(10)).apply { marginEnd = dpToPx(10) })
+
+        val statusTitle = TextView(this).apply {
+            text = "VOICE ENGINE STATUS"
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#94A3B8"))
+            letterSpacing = 0.05f
+        }
+        statusRow.addView(statusTitle, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        statusBadge = TextView(this).apply {
+            text = "ONLINE"
+            textSize = 11f
+            setTextColor(Color.parseColor("#00E676"))
+            typeface = Typeface.DEFAULT_BOLD
+            background = createRoundedDrawable("#052E16", "#15803D", 6)
+            setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3))
+        }
+        statusRow.addView(statusBadge)
+        statusCardLayout.addView(statusRow)
+
+        addSpacer(statusCardLayout, 16)
 
         val btnRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dpToPx(12), 0, 0)
         }
 
-        val startBtn = createStyledButton("Start Service", "#0284C7") {
+        val startBtn = createNeonButton("▶ START SERVICE", "#0284C7", "#38BDF8") {
             startAssistantService()
         }
-        val permBtn = createStyledButton("Permissions", "#334155") {
+        val permBtn = createNeonButton("🔒 PERMISSIONS", "#1E293B", "#475569") {
             requestAppPermissions()
         }
 
-        btnRow.addView(startBtn, LinearLayout.LayoutParams(0, dpToPx(46), 1f).apply { marginEnd = dpToPx(8) })
-        btnRow.addView(permBtn, LinearLayout.LayoutParams(0, dpToPx(46), 1f))
-        actionCardLayout.addView(btnRow)
-        actionCard.addView(actionCardLayout)
-        mainLayout.addView(actionCard)
+        btnRow.addView(startBtn, LinearLayout.LayoutParams(0, dpToPx(48), 1.2f).apply { marginEnd = dpToPx(10) })
+        btnRow.addView(permBtn, LinearLayout.LayoutParams(0, dpToPx(48), 1f))
+        statusCardLayout.addView(btnRow)
+        statusCard.addView(statusCardLayout)
+        mainLayout.addView(statusCard)
 
-        addSpacer(mainLayout, 16)
+        addSpacer(mainLayout, 24)
 
-        // Contact Voicemail Configuration Card
-        val configCard = createCardLayout()
+        // --- 2. Contact Routing Section ---
+        val sectionHeader = TextView(this).apply {
+            text = "INTELLIGENT VOICEMAIL ROUTING"
+            textSize = 13f
+            setTextColor(Color.parseColor("#38BDF8"))
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.05f
+        }
+        mainLayout.addView(sectionHeader)
+
+        addSpacer(mainLayout, 10)
+
+        val configCard = createGlassCard("#1E293B")
         val configLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+            setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18))
         }
 
-        val configHeader = TextView(this).apply {
-            text = "Configure Contact Voicemail"
-            textSize = 16f
-            setTextColor(Color.parseColor("#F8FAFC"))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
-        configLayout.addView(configHeader)
-
-        addSpacer(configLayout, 12)
-
-        val pickContactBtn = createStyledButton("👤 Choose Contact from Phone", "#1E293B") {
+        val pickContactBtn = createNeonButton("👤 SELECT PHONE CONTACT", "#111827", "#38BDF8") {
             val intent = Intent(Intent.ACTION_PICK, ContactsContract.CommonDataKinds.Phone.CONTENT_URI)
             startActivityForResult(intent, PICK_CONTACT_REQUEST)
         }
-        configLayout.addView(pickContactBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(46)))
+        configLayout.addView(pickContactBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48)))
 
         contactDisplayTv = TextView(this).apply {
-            text = "No contact selected"
-            textSize = 13f
-            setTextColor(Color.parseColor("#94A3B8"))
-            setPadding(0, dpToPx(8), 0, dpToPx(12))
+            text = "No contact chosen. Default language will apply."
+            textSize = 12f
+            setTextColor(Color.parseColor("#64748B"))
+            setPadding(dpToPx(4), dpToPx(10), dpToPx(4), dpToPx(12))
         }
         configLayout.addView(contactDisplayTv)
 
         val langLabel = TextView(this).apply {
-            text = "Select Voicemail Language:"
-            textSize = 13f
-            setTextColor(Color.parseColor("#E2E8F0"))
+            text = "Assigned Voicemail Language:"
+            textSize = 12f
+            setTextColor(Color.parseColor("#94A3B8"))
         }
         configLayout.addView(langLabel)
 
         languageSpinner = Spinner(this).apply {
             val adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, languages.map { it.first })
             this.adapter = adapter
-            background = createRoundedDrawable("#1E293B", "#475569")
-            setPadding(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(8))
+            background = createRoundedDrawable("#111827", "#334155", 8)
+            setPadding(dpToPx(14), dpToPx(10), dpToPx(14), dpToPx(10))
         }
-        configLayout.addView(languageSpinner, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48)).apply { topMargin = dpToPx(6) })
+        configLayout.addView(languageSpinner, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(50)).apply { topMargin = dpToPx(6) })
 
-        addSpacer(configLayout, 14)
+        addSpacer(configLayout, 16)
 
-        val saveRuleBtn = createStyledButton("Save Voicemail Rule", "#0284C7") {
+        val saveRuleBtn = createNeonButton("⚡ DEPLOY CONTACT RULE", "#2563EB", "#60A5FA") {
             if (selectedContactNumber.isNotBlank()) {
                 val selectedLang = languages[languageSpinner.selectedItemPosition]
                 languageManager.saveContactRule(
                     selectedContactNumber,
                     if (selectedContactName.isBlank()) selectedContactNumber else selectedContactName,
-                    selectedLang.first,
+                    selectedLang.first.replace("🌐 ", "").replace("🇮🇳 ", "").replace("🇪🇸 ", "").replace("🇫🇷 ", "").replace("🇩🇪 ", "").replace("🇸🇦 ", "").replace("🇨🇳 ", ""),
                     selectedLang.second
                 )
-                Toast.makeText(this, "Rule saved for $selectedContactName", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Rule deployed for $selectedContactName", Toast.LENGTH_SHORT).show()
                 selectedContactName = ""
                 selectedContactNumber = ""
-                contactDisplayTv.text = "No contact selected"
+                contactDisplayTv.text = "No contact chosen. Default language will apply."
+                contactDisplayTv.setTextColor(Color.parseColor("#64748B"))
                 refreshRulesList()
             } else {
-                Toast.makeText(this, "Please choose a contact first", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Select a contact from phone first", Toast.LENGTH_SHORT).show()
             }
         }
-        configLayout.addView(saveRuleBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(46)))
+        configLayout.addView(saveRuleBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(48)))
 
         configCard.addView(configLayout)
         mainLayout.addView(configCard)
 
-        addSpacer(mainLayout, 20)
+        addSpacer(mainLayout, 28)
 
-        // Saved Rules Header
-        val rulesHeader = TextView(this).apply {
-            text = "Configured Contacts"
-            textSize = 16f
-            setTextColor(Color.parseColor("#F8FAFC"))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        // --- 3. Active Deployments / Configured Contacts List ---
+        val rulesHeaderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        mainLayout.addView(rulesHeader)
 
-        addSpacer(mainLayout, 8)
+        val rulesTitle = TextView(this).apply {
+            text = "ACTIVE PROTOCOLS"
+            textSize = 13f
+            setTextColor(Color.parseColor("#F8FAFC"))
+            typeface = Typeface.DEFAULT_BOLD
+            letterSpacing = 0.05f
+        }
+        rulesHeaderRow.addView(rulesTitle, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+
+        mainLayout.addView(rulesHeaderRow)
+        addSpacer(mainLayout, 12)
 
         rulesContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -217,21 +260,30 @@ class MainActivity : Activity() {
         val rules = languageManager.getAllRules()
 
         if (rules.isEmpty()) {
-            val emptyTv = TextView(this).apply {
-                text = "No custom rules set. All calls default to English voicemail."
-                textSize = 13f
-                setTextColor(Color.parseColor("#64748B"))
-                setPadding(0, dpToPx(8), 0, 0)
+            val emptyCard = createGlassCard("#1E293B")
+            val emptyLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dpToPx(16), dpToPx(24), dpToPx(16), dpToPx(24))
             }
-            rulesContainer.addView(emptyTv)
+            val emptyTv = TextView(this).apply {
+                text = "No active contact routing rules configured.\nAll rejected calls automatically respond in English."
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setTextColor(Color.parseColor("#475569"))
+                setLineSpacing(dpToPx(4).toFloat(), 1f)
+            }
+            emptyLayout.addView(emptyTv)
+            emptyCard.addView(emptyLayout)
+            rulesContainer.addView(emptyCard)
             return
         }
 
         for (rule in rules) {
-            val ruleCard = createCardLayout()
+            val ruleCard = createGlassCard("#0284C7")
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
+                setPadding(dpToPx(16), dpToPx(14), dpToPx(16), dpToPx(14))
                 gravity = Gravity.CENTER_VERTICAL
             }
 
@@ -244,12 +296,13 @@ class MainActivity : Activity() {
                 text = rule.name
                 textSize = 15f
                 setTextColor(Color.parseColor("#F8FAFC"))
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                typeface = Typeface.DEFAULT_BOLD
             }
             val detailsTv = TextView(this).apply {
-                text = "${rule.number} • ${rule.languageName}"
+                text = "${rule.number}  •  ${rule.languageName}"
                 textSize = 12f
                 setTextColor(Color.parseColor("#38BDF8"))
+                setPadding(0, dpToPx(2), 0, 0)
             }
 
             textInfo.addView(nameTv)
@@ -257,19 +310,20 @@ class MainActivity : Activity() {
             row.addView(textInfo)
 
             val deleteBtn = Button(this).apply {
-                text = "Delete"
-                textSize = 12f
+                text = "✕"
+                textSize = 14f
                 setTextColor(Color.parseColor("#EF4444"))
-                background = createRoundedDrawable("#334155", "#EF4444")
+                typeface = Typeface.DEFAULT_BOLD
+                background = createRoundedDrawable("#450A0A", "#991B1B", 8)
                 setOnClickListener {
                     languageManager.removeContactRule(rule.number)
                     refreshRulesList()
                 }
             }
-            row.addView(deleteBtn, LinearLayout.LayoutParams(dpToPx(80), dpToPx(38)))
+            row.addView(deleteBtn, LinearLayout.LayoutParams(dpToPx(42), dpToPx(40)))
             ruleCard.addView(row)
             rulesContainer.addView(ruleCard)
-            addSpacer(rulesContainer, 8)
+            addSpacer(rulesContainer, 10)
         }
     }
 
@@ -287,7 +341,7 @@ class MainActivity : Activity() {
                     if (it.moveToFirst()) {
                         selectedContactName = it.getString(0) ?: "Contact"
                         selectedContactNumber = it.getString(1) ?: ""
-                        contactDisplayTv.text = "Selected: $selectedContactName ($selectedContactNumber)"
+                        contactDisplayTv.text = "Target Locked: $selectedContactName ($selectedContactNumber)"
                         contactDisplayTv.setTextColor(Color.parseColor("#38BDF8"))
                     }
                 }
@@ -302,7 +356,7 @@ class MainActivity : Activity() {
         } else {
             startService(serviceIntent)
         }
-        Toast.makeText(this, "Assistant & Voicemail Active", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "JARVIS Core Initialized", Toast.LENGTH_SHORT).show()
     }
 
     private fun requestAppPermissions() {
@@ -319,32 +373,46 @@ class MainActivity : Activity() {
         ActivityCompat.requestPermissions(this, permissions.toTypedArray(), PERMISSION_REQUEST_CODE)
     }
 
-    private fun createCardLayout(): FrameLayout {
+    private fun createGlassCard(borderColor: String): FrameLayout {
         return FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             )
-            background = createRoundedDrawable("#1E293B", "#334155")
+            background = createRoundedDrawable("#0F172A", borderColor, 14)
+            elevation = dpToPx(4).toFloat()
         }
     }
 
-    private fun createStyledButton(label: String, bgColor: String, onClick: () -> Unit): Button {
+    private fun createNeonButton(label: String, bgColor: String, strokeColor: String, onClick: () -> Unit): Button {
         return Button(this).apply {
             text = label
             isAllCaps = false
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
-            background = createRoundedDrawable(bgColor, bgColor)
+            
+            val normalBg = createRoundedDrawable(bgColor, strokeColor, 10)
+            val rippleColor = ColorStateList.valueOf(Color.parseColor("#38BDF8"))
+            background = RippleDrawable(rippleColor, normalBg, null)
+            
             setOnClickListener { onClick() }
         }
     }
 
-    private fun createRoundedDrawable(fillColor: String, strokeColor: String): GradientDrawable {
+    private fun createRoundedDrawable(fillColor: String, strokeColor: String, radiusDp: Int): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
-            cornerRadius = dpToPx(10).toFloat()
+            cornerRadius = dpToPx(radiusDp).toFloat()
             setColor(Color.parseColor(fillColor))
             setStroke(dpToPx(1), Color.parseColor(strokeColor))
+        }
+    }
+
+    private fun createCircleDrawable(fillColor: String): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.parseColor(fillColor))
         }
     }
 
