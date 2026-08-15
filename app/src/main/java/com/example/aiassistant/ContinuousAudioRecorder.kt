@@ -21,8 +21,8 @@ class ContinuousAudioRecorder(
     private var isRecording = false
     private var recordingJob: Job? = null
 
-    // Sensitive voice detection threshold
-    private val silenceThreshold = 500.0
+    // Sensitive speech threshold
+    private val silenceThreshold = 300.0
     private val outputStream = ByteArrayOutputStream()
     private var isSpeaking = false
     private var silenceFramesCount = 0
@@ -92,8 +92,8 @@ class ContinuousAudioRecorder(
                 outputStream.write(byteChunk, 0, byteChunk.size)
             }
 
-            // After ~1.2 seconds of silence, create formatted WAV file
-            if (silenceFramesCount > 15) {
+            // Cut down silence wait to ~500ms (6 frames) for near-instant dispatch
+            if (silenceFramesCount > 6) {
                 isSpeaking = false
                 silenceFramesCount = 0
                 val pcmData: ByteArray
@@ -101,7 +101,7 @@ class ContinuousAudioRecorder(
                     pcmData = outputStream.toByteArray()
                     outputStream.reset()
                 }
-                if (pcmData.size > 8000) { // Discard accidental short clicks
+                if (pcmData.size > 6000) {
                     val wavData = addWavHeader(pcmData, sampleRate, 1, 16)
                     onSpeechDetected(wavData)
                 }
