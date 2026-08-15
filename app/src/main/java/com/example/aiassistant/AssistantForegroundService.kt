@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
-import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,10 +27,11 @@ class AssistantForegroundService : Service() {
     private var continuousRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
+    // Pre-configured API keys for multi-engine failover
     private val keyConfig = ApiKeyConfig(
-        groqKey = "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",           // Starts with gsk_...
-        geminiKey = "AQ.Ab8RN6LNWwcJsFDXsOj9dzu7talXI8TmKFQDtgDXisvtqZoQhA",       // From Google AI Studio
-        openRouterKey = "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"     // Optional: sk-or-...
+        groqKey = "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",
+        geminiKey = "AQ.Ab8RN6LNWwcJsFDXsOj9dzu7talXI8TmKFQDtgDXisvtqZoQhA",
+        openRouterKey = "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"
     )
 
     private lateinit var aiRouter: UnifiedAiRouter
@@ -69,8 +69,6 @@ class AssistantForegroundService : Service() {
 
     private fun handleUnansweredCallVoicemail(callerNumber: String, languageCode: String) {
         serviceScope.launch {
-            Toast.makeText(applicationContext, "Voicemail Triggered: $callerNumber ($languageCode)", Toast.LENGTH_LONG).show()
-
             val prompt = "Generate a concise 1-sentence confirmation stating an unanswered or busy call from $callerNumber was routed to voicemail in language code $languageCode."
             val reply = aiRouter.queryAssistant(prompt, AssistantPersona.JARVIS, assistantMemory)
             voiceManager.speak(reply, AssistantPersona.JARVIS, languageCode)
@@ -81,14 +79,9 @@ class AssistantForegroundService : Service() {
         continuousRecorder?.stopListening()
         continuousRecorder = ContinuousAudioRecorder { wavAudioChunk ->
             serviceScope.launch {
-                val (persona, reply) = aiRouter.processVoiceAudio(wavAudioChunk, assistantMemory) { heardText ->
-                    serviceScope.launch(Dispatchers.Main) {
-                        Toast.makeText(applicationContext, "Heard: \"$heardText\"", Toast.LENGTH_SHORT).show()
-                    }
-                }
+                val (persona, reply) = aiRouter.processVoiceAudio(wavAudioChunk, assistantMemory, null)
 
                 if (persona != null && !reply.isNullOrBlank()) {
-                    Toast.makeText(applicationContext, "${persona.name}: $reply", Toast.LENGTH_LONG).show()
                     voiceManager.speak(reply, persona)
                     deviceController.handleActionCommand(reply)
                 }
