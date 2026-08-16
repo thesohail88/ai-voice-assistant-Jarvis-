@@ -34,6 +34,7 @@ class AssistantForegroundService : Service() {
     private lateinit var screenWakeHelper: ScreenWakeHelper
     private lateinit var hudOverlayManager: HudOverlayManager
     private lateinit var proactiveTelemetryMonitor: ProactiveTelemetryMonitor
+    private lateinit var contactManager: ContactManager
     private lateinit var audioManager: AudioManager
     
     private var audioRecorder: ContinuousAudioRecorder? = null
@@ -69,7 +70,7 @@ class AssistantForegroundService : Service() {
                             }
                             KeyEvent.ACTION_UP -> {
                                 val duration = System.currentTimeMillis() - buttonDownTimestamp
-                                if (duration >= 550 && (
+                                if (duration >= 500 && (
                                     event.keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
                                     event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
                                     event.keyCode == KeyEvent.KEYCODE_CALL
@@ -94,7 +95,7 @@ class AssistantForegroundService : Service() {
             if (Settings.canDrawOverlays(this@AssistantForegroundService)) {
                 hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
             }
-            voiceManager.speak("Yes sir, listening through headset.", AssistantPersona.JARVIS)
+            voiceManager.speak("Yes sir, standing by.", AssistantPersona.JARVIS)
             delay(3500)
             hudOverlayManager.hideHud()
         }
@@ -103,6 +104,7 @@ class AssistantForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         try {
+            contactManager = ContactManager(this)
             voiceManager = VoiceManager(this)
             deviceController = DeviceController(this)
             assistantMemory = AssistantMemory(this)
@@ -111,7 +113,6 @@ class AssistantForegroundService : Service() {
             hudOverlayManager = HudOverlayManager(this)
             audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-            // 1. Acquire Partial WakeLock
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
@@ -121,11 +122,10 @@ class AssistantForegroundService : Service() {
                 acquire(24 * 60 * 60 * 1000L)
             }
 
-            // 2. Start Foreground Service Immediately to Prevent ANR/FGS Kill
             startServiceInForeground()
             requestContinuousAudioFocus()
 
-            // 3. Proactive Hardware / Battery Alerts
+            // 1. Proactive Hardware / Battery Alerts
             proactiveTelemetryMonitor = ProactiveTelemetryMonitor(this) { alertText, persona ->
                 serviceScope.launch {
                     screenWakeHelper.wakeScreen(5000L)
@@ -139,11 +139,14 @@ class AssistantForegroundService : Service() {
             }
             proactiveTelemetryMonitor.startMonitoring()
 
-            // 4. Voicemail & Notification Interceptor with Multilingual Translation
+            // 2. Incoming Voicemail & SMS Notification Interceptor with Contact-Specific Translation
             NotificationInterceptorService.onNotificationReceived = { sender, message, app ->
                 serviceScope.launch {
                     val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
-                    val targetLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
+                    val defaultLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
+                    
+                    // Match sender name/number against per-contact rules
+                    val targetLang = contactManager.getLanguageForContact(sender, defaultLang)
 
                     val prompt = "Incoming $app message/voicemail from $sender: '$message'. Translate and deliver a 1-sentence tactical briefing in $targetLang."
                     val responseText = aiRouter.processDirectTextPrompt(prompt, AssistantPersona.JARVIS)
@@ -158,7 +161,7 @@ class AssistantForegroundService : Service() {
                 }
             }
 
-            // 5. Register Media Key Receiver with Android 14 Export Flags
+            // 3. Register Headset Button Receiver
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_MEDIA_BUTTON)
                 addAction(Intent.ACTION_VOICE_COMMAND)
@@ -171,7 +174,7 @@ class AssistantForegroundService : Service() {
             }
 
             serviceScope.launch {
-                delay(1000)
+                delay(800)
                 voiceManager.speak("Systems operational, sir. Standing by on lock screen.", AssistantPersona.JARVIS)
                 startContinuousListening()
             }
@@ -226,22 +229,20 @@ class AssistantForegroundService : Service() {
         try {
             audioRecorder = ContinuousAudioRecorder { audioBytes ->
                 serviceScope.launch {
-                    if (Settings.canDrawOverlays(this@AssistantForegroundService)) {
-                        hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
-                    }
-
                     val resultPair = aiRouter.processVoiceAudio(audioBytes, assistantMemory)
                     val persona = resultPair.first
                     val response = resultPair.second
 
                     if (persona != null && !response.isNullOrBlank()) {
                         screenWakeHelper.wakeScreen(8000L)
+                        if (Settings.canDrawOverlays(this@AssistantForegroundService)) {
+                            hudOverlayManager.showListeningHud(persona)
+                        }
                         deviceController.handleActionCommand(response)
                         voiceManager.speak(response, persona)
+                        delay(4000)
+                        hudOverlayManager.hideHud()
                     }
-
-                    delay(4000)
-                    hudOverlayManager.hideHud()
                 }
             }
             audioRecorder?.startListening()
