@@ -2,11 +2,11 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#03070D"
+    android:background="#03070E"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="14dp">
 
-    <!-- Top Command Bar -->
+    <!-- Header / Persona Switcher -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -37,7 +37,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:text="24/7 STANDBY • NEURAL ENGINE ACTIVE"
+                android:text="PHONEBOOK SYNCED • VOICE DSP READY"
                 android:textColor="#4DD0E1"
                 android:textSize="9sp" />
         </LinearLayout>
@@ -55,7 +55,7 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Quick Config Bar (Voicemail/SMS Translation & Follow-Up Toggles) -->
+    <!-- Language & Contact Rules Navigation Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -66,31 +66,32 @@
         android:padding="8dp">
 
         <Button
-            android:id="@+id/btnLangSwitch"
+            android:id="@+id/btnDefaultLangSwitch"
             android:layout_width="0dp"
             android:layout_height="34dp"
             android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="#0F243A"
             android:fontFamily="monospace"
-            android:text="LANG: ENGLISH"
+            android:text="DEF LANG: ENG"
             android:textColor="#00E5FF"
             android:textSize="10sp" />
 
         <Button
-            android:id="@+id/btnFollowUpToggle"
+            android:id="@+id/btnManageContactLangs"
             android:layout_width="0dp"
             android:layout_height="34dp"
             android:layout_marginStart="4dp"
             android:layout_weight="1"
-            android:background="#0F243A"
+            android:background="#1B3A57"
             android:fontFamily="monospace"
-            android:text="FOLLOW-UP: ON"
+            android:text="CONTACT RULES (0)"
             android:textColor="#00E676"
-            android:textSize="10sp" />
+            android:textSize="10sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Center Reactor Interactive Visualizer -->
+    <!-- Center Reactor Interactive Core -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -114,7 +115,7 @@
             android:textSize="10sp" />
     </FrameLayout>
 
-    <!-- Live Telemetry Card -->
+    <!-- Telemetry Readout -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -158,21 +159,21 @@
                 android:textSize="11sp" />
 
             <TextView
-                android:id="@+id/tvNetworkStat"
+                android:id="@+id/tvFollowUpStat"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:fontFamily="monospace"
-                android:text="BT: STANDBY"
+                android:text="FOLLOW-UP: ON"
                 android:textColor="#00E676"
                 android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Live Tactical Log Terminal -->
+    <!-- Event Terminal -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="110dp"
+        android:layout_height="100dp"
         android:layout_marginTop="8dp"
         android:background="#02050A"
         android:orientation="vertical"
@@ -198,13 +199,13 @@
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
                 android:lineSpacingExtra="2dp"
-                android:text="[SYS] Neural core loaded.\n[SYS] Voicemail/SMS translation module active.\n[SYS] Headset long-press interceptor ready."
+                android:text="[SYS] Neural core loaded.\n[SYS] Contact translation rules loaded.\n[SYS] Continuous audio listener standing by."
                 android:textColor="#00E5FF"
                 android:textSize="10sp" />
         </ScrollView>
     </LinearLayout>
 
-    <!-- Execution Buttons -->
+    <!-- Command Execution Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
