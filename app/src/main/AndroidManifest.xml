@@ -24,9 +24,9 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@android:drawable/sym_def_app_icon"
         android:label="JARVIS"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@android:drawable/sym_def_app_icon"
         android:supportsRtl="true"
         android:theme="@style/Theme.AIAssistant"
         tools:targetApi="34">
@@ -40,14 +40,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Core Foreground Engine -->
+        <!-- Core Foreground Standby Engine -->
         <service
             android:name=".AssistantForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone|mediaProjection" />
 
-        <!-- Notification Interceptor -->
+        <!-- Notification & Message Interceptor -->
         <service
             android:name=".NotificationInterceptorService"
             android:enabled="true"
@@ -58,7 +58,7 @@
             </intent-filter>
         </service>
 
-        <!-- Dynamic Sensor & Power Broadcast Receiver -->
+        <!-- Dynamic Sensor & Context Receiver -->
         <receiver
             android:name=".SystemContextTriggerReceiver"
             android:enabled="true"
@@ -71,7 +71,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Bluetooth / Earbud Button Trigger Receiver -->
+        <!-- Bluetooth / Earbud Hardware Button Receiver -->
         <receiver
             android:name=".MediaButtonTriggerReceiver"
             android:exported="true">
