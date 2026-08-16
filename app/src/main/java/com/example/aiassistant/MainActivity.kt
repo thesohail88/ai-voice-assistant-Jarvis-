@@ -16,6 +16,7 @@ import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -26,11 +27,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var scrollTerminal: ScrollView
     private lateinit var tvBatteryStat: TextView
     private lateinit var btnTogglePersona: Button
+    private lateinit var btnLangSwitch: Button
     private lateinit var btnStartService: Button
     private lateinit var btnPermissions: Button
     private lateinit var arcReactorContainer: FrameLayout
 
     private var activePersona = AssistantPersona.JARVIS
+
+    private val supportedLanguages = arrayOf(
+        "English", "Hindi", "Spanish", "French", "German", "Japanese"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,13 +46,19 @@ class MainActivity : AppCompatActivity() {
         scrollTerminal = findViewById(R.id.scrollTerminal)
         tvBatteryStat = findViewById(R.id.tvBatteryStat)
         btnTogglePersona = findViewById(R.id.btnTogglePersona)
+        btnLangSwitch = findViewById(R.id.btnLangSwitch)
         btnStartService = findViewById(R.id.btnStartService)
         btnPermissions = findViewById(R.id.btnPermissions)
         arcReactorContainer = findViewById(R.id.arcReactorContainer)
 
+        val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
+        val currentLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
+        btnLangSwitch.text = "LANG: ${currentLang.uppercase()}"
+
         updateTelemetryReadout()
         checkAndRequestSystemPermissions()
 
+        // Toggle Persona Mode (JARVIS <-> FRIDAY)
         btnTogglePersona.setOnClickListener {
             activePersona = if (activePersona == AssistantPersona.JARVIS) {
                 btnTogglePersona.text = "MODE: FRIDAY"
@@ -63,6 +75,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Language Picker for SMS & Voicemail Translations
+        btnLangSwitch.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Select Voicemail / SMS Translation Language")
+                .setItems(supportedLanguages) { _, which ->
+                    val chosen = supportedLanguages[which]
+                    prefs.edit().putString("MESSAGE_LANGUAGE", chosen).apply()
+                    btnLangSwitch.text = "LANG: ${chosen.uppercase()}"
+                    logToTerminal("Voicemail & SMS output language set to: $chosen")
+                }
+                .show()
+        }
+
+        // Activate / Restart Background Service
         btnStartService.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 val serviceIntent = Intent(this, AssistantForegroundService::class.java)
