@@ -24,7 +24,6 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // Expose secrets to BuildConfig safely
         val groqKey = localProperties.getProperty("GROQ_API_KEY", "")
         val geminiKey = localProperties.getProperty("GEMINI_API_KEY", "")
         val openRouterKey = localProperties.getProperty("OPENROUTER_API_KEY", "")
