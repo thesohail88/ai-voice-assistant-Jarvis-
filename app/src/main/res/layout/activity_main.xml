@@ -2,18 +2,18 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#03070E"
+    android:background="#02060D"
     android:orientation="vertical"
-    android:padding="14dp">
+    android:padding="12dp">
 
-    <!-- Header / Persona Switcher -->
+    <!-- Top Command Console -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#091422"
+        android:background="#091524"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="12dp">
+        android:padding="10dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -27,7 +27,7 @@
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
                 android:letterSpacing="0.08"
-                android:text="STARK CORE // OS v4.2"
+                android:text="STARK CORE // OS v5.2"
                 android:textColor="#00E5FF"
                 android:textSize="15sp"
                 android:textStyle="bold" />
@@ -37,8 +37,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:text="PHONEBOOK SYNCED • VOICE DSP READY"
-                android:textColor="#4DD0E1"
+                android:text="24/7 ACTIVE • BLUETOOTH &amp; MIC ARMED"
+                android:textColor="#00E676"
                 android:textSize="9sp" />
         </LinearLayout>
 
@@ -46,7 +46,7 @@
             android:id="@+id/btnTogglePersona"
             android:layout_width="wrap_content"
             android:layout_height="36dp"
-            android:background="#132B45"
+            android:background="#122C4A"
             android:fontFamily="monospace"
             android:paddingHorizontal="10dp"
             android:text="JARVIS"
@@ -55,25 +55,25 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Language & Contact Rules Navigation Bar -->
+    <!-- Language, Headset & Rules Controls -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="6dp"
         android:background="#07111D"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="8dp">
+        android:padding="6dp">
 
         <Button
             android:id="@+id/btnDefaultLangSwitch"
             android:layout_width="0dp"
             android:layout_height="34dp"
-            android:layout_marginEnd="4dp"
+            android:layout_marginEnd="3dp"
             android:layout_weight="1"
-            android:background="#0F243A"
+            android:background="#0E2338"
             android:fontFamily="monospace"
-            android:text="DEF LANG: ENG"
+            android:text="DEF: ENG"
             android:textColor="#00E5FF"
             android:textSize="10sp" />
 
@@ -81,101 +81,45 @@
             android:id="@+id/btnManageContactLangs"
             android:layout_width="0dp"
             android:layout_height="34dp"
-            android:layout_marginStart="4dp"
+            android:layout_marginHorizontal="3dp"
             android:layout_weight="1"
-            android:background="#1B3A57"
+            android:background="#1B3E5C"
             android:fontFamily="monospace"
-            android:text="CONTACT RULES (0)"
+            android:text="RULES (0)"
             android:textColor="#00E676"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="10sp" />
+
+        <Button
+            android:id="@+id/btnBtConfig"
+            android:layout_width="0dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="3dp"
+            android:layout_weight="1.2"
+            android:background="#13334F"
+            android:fontFamily="monospace"
+            android:text="BT: LONG PRESS"
+            android:textColor="#FFD54F"
+            android:textSize="9sp" />
     </LinearLayout>
 
-    <!-- Center Reactor Interactive Core -->
+    <!-- Center Arc Reactor Interactive Visualizer -->
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_height="140dp">
 
         <com.example.aiassistant.ArcReactorHudView
             android:id="@+id/arcReactorView"
-            android:layout_width="190dp"
-            android:layout_height="190dp"
+            android:layout_width="135dp"
+            android:layout_height="135dp"
             android:layout_gravity="center" />
-
-        <TextView
-            android:id="@+id/tvCorePrompt"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="6dp"
-            android:fontFamily="monospace"
-            android:text="[ TAP CORE / SAY 'JARVIS' / HOLD HEADSET ]"
-            android:textColor="#546E7A"
-            android:textSize="10sp" />
     </FrameLayout>
 
-    <!-- Telemetry Readout -->
+    <!-- Interactive Live Chat Window -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="#091422"
-        android:orientation="vertical"
-        android:padding="10dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:text="DIAGNOSTIC TELEMETRY"
-            android:textColor="#78909C"
-            android:textSize="9sp"
-            android:textStyle="bold" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/tvBatteryStat"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:fontFamily="monospace"
-                android:text="PWR: 100%"
-                android:textColor="#ECEFF1"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/tvAudioStat"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:fontFamily="monospace"
-                android:text="MIC: ACTIVE"
-                android:textColor="#00E5FF"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/tvFollowUpStat"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:fontFamily="monospace"
-                android:text="FOLLOW-UP: ON"
-                android:textColor="#00E676"
-                android:textSize="11sp" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- Event Terminal -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="100dp"
-        android:layout_marginTop="8dp"
-        android:background="#02050A"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#010408"
         android:orientation="vertical"
         android:padding="8dp">
 
@@ -183,55 +127,92 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
-            android:text="SYSTEM TERMINAL"
-            android:textColor="#37474F"
-            android:textSize="9sp" />
+            android:text="TACTICAL NEURAL CHAT &amp; EVENT FEED"
+            android:textColor="#546E7A"
+            android:textSize="9sp"
+            android:textStyle="bold" />
 
         <ScrollView
-            android:id="@+id/scrollTerminal"
+            android:id="@+id/scrollChat"
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_marginTop="2dp">
+            android:layout_height="0dp"
+            android:layout_marginTop="4dp"
+            android:layout_weight="1">
 
             <TextView
-                android:id="@+id/tvTerminalLog"
+                android:id="@+id/tvChatFeed"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:lineSpacingExtra="2dp"
-                android:text="[SYS] Neural core loaded.\n[SYS] Contact translation rules loaded.\n[SYS] Continuous audio listener standing by."
+                android:lineSpacingExtra="3dp"
+                android:text="[JARVIS]: All neural systems operational, sir. How may I assist you today?"
                 android:textColor="#00E5FF"
-                android:textSize="10sp" />
+                android:textSize="11sp" />
         </ScrollView>
+
+        <!-- Chat Input Bar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/etChatInput"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="#091524"
+                android:fontFamily="monospace"
+                android:hint="Type directive to Jarvis..."
+                android:inputType="text"
+                android:paddingHorizontal="10dp"
+                android:textColor="#ECEFF1"
+                android:textColorHint="#455A64"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnSendChat"
+                android:layout_width="60dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="4dp"
+                android:background="#00E5FF"
+                android:fontFamily="monospace"
+                android:text="SEND"
+                android:textColor="#02060D"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Command Execution Buttons -->
+    <!-- Bottom Controls -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="8dp"
         android:orientation="horizontal">
 
         <Button
             android:id="@+id/btnStartService"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="42dp"
             android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="#00E5FF"
             android:fontFamily="monospace"
             android:text="ACTIVATE CORE"
-            android:textColor="#03070D"
+            android:textColor="#02060D"
             android:textSize="11sp"
             android:textStyle="bold" />
 
         <Button
             android:id="@+id/btnPermissions"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="42dp"
             android:layout_marginStart="4dp"
             android:layout_weight="1"
-            android:background="#0F243A"
+            android:background="#0E2338"
             android:fontFamily="monospace"
             android:text="CHECK ACCESS"
             android:textColor="#ECEFF1"
