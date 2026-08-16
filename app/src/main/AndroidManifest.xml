@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.aiassistant">
 
-    <!-- Audio & Service Permissions -->
+    <!-- Audio, Recording & Foreground Service Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
@@ -40,14 +40,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Core Foreground Standby Engine -->
+        <!-- Core Foreground Engine -->
         <service
             android:name=".AssistantForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone|mediaProjection" />
 
-        <!-- Notification & Message Interceptor -->
+        <!-- Notification Interceptor -->
         <service
             android:name=".NotificationInterceptorService"
             android:enabled="true"
@@ -58,7 +58,7 @@
             </intent-filter>
         </service>
 
-        <!-- Dynamic Context & Sensor Broadcast Receiver -->
+        <!-- Dynamic Sensor & Power Broadcast Receiver -->
         <receiver
             android:name=".SystemContextTriggerReceiver"
             android:enabled="true"
@@ -68,6 +68,15 @@
                 <action android:name="android.intent.action.POWER_CONNECTED" />
                 <action android:name="android.intent.action.POWER_DISCONNECTED" />
                 <action android:name="android.net.wifi.STATE_CHANGE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Bluetooth / Earbud Button Trigger Receiver -->
+        <receiver
+            android:name=".MediaButtonTriggerReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
 
