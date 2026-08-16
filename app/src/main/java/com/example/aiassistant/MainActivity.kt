@@ -28,11 +28,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvBatteryStat: TextView
     private lateinit var btnTogglePersona: Button
     private lateinit var btnLangSwitch: Button
+    private lateinit var btnFollowUpToggle: Button
     private lateinit var btnStartService: Button
     private lateinit var btnPermissions: Button
     private lateinit var arcReactorContainer: FrameLayout
 
     private var activePersona = AssistantPersona.JARVIS
+    private var isFollowUpEnabled = true
 
     private val supportedLanguages = arrayOf(
         "English", "Hindi", "Spanish", "French", "German", "Japanese"
@@ -47,18 +49,22 @@ class MainActivity : AppCompatActivity() {
         tvBatteryStat = findViewById(R.id.tvBatteryStat)
         btnTogglePersona = findViewById(R.id.btnTogglePersona)
         btnLangSwitch = findViewById(R.id.btnLangSwitch)
+        btnFollowUpToggle = findViewById(R.id.btnFollowUpToggle)
         btnStartService = findViewById(R.id.btnStartService)
         btnPermissions = findViewById(R.id.btnPermissions)
         arcReactorContainer = findViewById(R.id.arcReactorContainer)
 
         val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
         val currentLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
+        isFollowUpEnabled = prefs.getBoolean("FOLLOW_UP_CONVERSATION", true)
+
         btnLangSwitch.text = "LANG: ${currentLang.uppercase()}"
+        updateFollowUpButtonUI()
 
         updateTelemetryReadout()
         checkAndRequestSystemPermissions()
 
-        // Toggle Persona Mode (JARVIS <-> FRIDAY)
+        // 1. Switch Active Persona (J.A.R.V.I.S. <-> F.R.I.D.A.Y.)
         btnTogglePersona.setOnClickListener {
             activePersona = if (activePersona == AssistantPersona.JARVIS) {
                 btnTogglePersona.text = "MODE: FRIDAY"
@@ -75,7 +81,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Language Picker for SMS & Voicemail Translations
+        // 2. Multilingual Voicemail & SMS Language Picker
         btnLangSwitch.setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Select Voicemail / SMS Translation Language")
@@ -88,7 +94,15 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
-        // Activate / Restart Background Service
+        // 3. Toggle Follow-Up Conversation Mode
+        btnFollowUpToggle.setOnClickListener {
+            isFollowUpEnabled = !isFollowUpEnabled
+            prefs.edit().putBoolean("FOLLOW_UP_CONVERSATION", isFollowUpEnabled).apply()
+            updateFollowUpButtonUI()
+            logToTerminal("Follow-up continuous dialogue: ${if (isFollowUpEnabled) "ENABLED" else "DISABLED"}")
+        }
+
+        // 4. Activate 24/7 Foreground Standby Engine
         btnStartService.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 val serviceIntent = Intent(this, AssistantForegroundService::class.java)
@@ -104,14 +118,26 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 5. Check System Overlay & Access Permissions
         btnPermissions.setOnClickListener {
             validateAndRequestPermissions()
         }
 
+        // 6. Interactive Core Tap Trigger
         arcReactorContainer.setOnClickListener {
-            logToTerminal("Manual voice trigger engaged.")
+            logToTerminal("Manual HUD core trigger engaged.")
             val voiceManager = VoiceManager(this)
             voiceManager.speak("Systems operational, sir. Awaiting orders.", activePersona)
+        }
+    }
+
+    private fun updateFollowUpButtonUI() {
+        if (isFollowUpEnabled) {
+            btnFollowUpToggle.text = "FOLLOW-UP: ON"
+            btnFollowUpToggle.setTextColor(Color.parseColor("#00E676"))
+        } else {
+            btnFollowUpToggle.text = "FOLLOW-UP: OFF"
+            btnFollowUpToggle.setTextColor(Color.parseColor("#EF5350"))
         }
     }
 
