@@ -3,13 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.aiassistant">
 
-    <!-- Audio, Recording & Service Permissions -->
+    <!-- Audio & Microphone Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Bluetooth & Hardware Interceptors -->
+    <!-- Bluetooth Headset & Hardware Permissions -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- Network & App Telemetry -->
+    <!-- Network & Device Queries -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -41,6 +41,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Intercepts Bluetooth long-press voice command triggers -->
             <intent-filter>
                 <action android:name="android.intent.action.VOICE_COMMAND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -48,14 +49,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Core Foreground Engine -->
+        <!-- Continuous Standby Foreground Engine -->
         <service
             android:name=".AssistantForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
-        <!-- Notification & Voicemail/Message Interceptor -->
+        <!-- Notification & Voicemail/SMS Interceptor -->
         <service
             android:name=".NotificationInterceptorService"
             android:enabled="true"
@@ -66,7 +67,7 @@
             </intent-filter>
         </service>
 
-        <!-- Context & Telemetry Receiver -->
+        <!-- Telemetry & Sensor Receiver -->
         <receiver
             android:name=".SystemContextTriggerReceiver"
             android:enabled="true"
