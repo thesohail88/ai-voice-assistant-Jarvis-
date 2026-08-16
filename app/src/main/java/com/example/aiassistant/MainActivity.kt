@@ -1,6 +1,7 @@
 package com.example.aiassistant
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -10,8 +11,10 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -19,126 +22,198 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var tvTerminalLog: TextView
-    private lateinit var scrollTerminal: ScrollView
-    private lateinit var tvBatteryStat: TextView
-    private lateinit var tvFollowUpStat: TextView
+    private lateinit var tvChatFeed: TextView
+    private lateinit var scrollChat: ScrollView
+    private lateinit var etChatInput: EditText
+    private lateinit var btnSendChat: Button
     private lateinit var btnTogglePersona: Button
     private lateinit var btnDefaultLangSwitch: Button
     private lateinit var btnManageContactLangs: Button
+    private lateinit var btnBtConfig: Button
     private lateinit var btnStartService: Button
     private lateinit var btnPermissions: Button
     private lateinit var arcReactorView: ArcReactorHudView
     private lateinit var contactManager: ContactManager
+    private lateinit var aiRouter: UnifiedAiRouter
+    private lateinit var voiceManager: VoiceManager
 
     private var activePersona = AssistantPersona.JARVIS
-    private var isFollowUpEnabled = true
+    private val activityScope = CoroutineScope(Dispatchers.Main)
 
     private val supportedLanguages = arrayOf(
         "English", "Hindi", "Spanish", "French", "German", "Japanese", "Russian", "Arabic"
+    )
+
+    private val btOptions = arrayOf(
+        "Long Press Hook (Default)",
+        "Single Click Play/Pause",
+        "Dedicated Voice Assist Key",
+        "Next Track Key"
+    )
+
+    private val btKeys = arrayOf(
+        "LONG_PRESS_HOOK",
+        "SINGLE_CLICK_HOOK",
+        "VOICE_ASSIST_KEY",
+        "DOUBLE_CLICK_NEXT"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        val keyConfig = ApiKeyConfig(
+            groqKey = BuildConfig.GROQ_KEY,
+            geminiKey = BuildConfig.GEMINI_KEY,
+            openRouterKey = BuildConfig.OPENROUTER_KEY
+        )
+        aiRouter = UnifiedAiRouter(keyConfig, this)
+        voiceManager = VoiceManager(this)
         contactManager = ContactManager(this)
 
-        tvTerminalLog = findViewById(R.id.tvTerminalLog)
-        scrollTerminal = findViewById(R.id.scrollTerminal)
-        tvBatteryStat = findViewById(R.id.tvBatteryStat)
-        tvFollowUpStat = findViewById(R.id.tvFollowUpStat)
+        tvChatFeed = findViewById(R.id.tvChatFeed)
+        scrollChat = findViewById(R.id.scrollChat)
+        etChatInput = findViewById(R.id.etChatInput)
+        btnSendChat = findViewById(R.id.btnSendChat)
         btnTogglePersona = findViewById(R.id.btnTogglePersona)
         btnDefaultLangSwitch = findViewById(R.id.btnDefaultLangSwitch)
         btnManageContactLangs = findViewById(R.id.btnManageContactLangs)
+        btnBtConfig = findViewById(R.id.btnBtConfig)
         btnStartService = findViewById(R.id.btnStartService)
         btnPermissions = findViewById(R.id.btnPermissions)
         arcReactorView = findViewById(R.id.arcReactorView)
 
         val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
         val defaultLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
-        isFollowUpEnabled = prefs.getBoolean("FOLLOW_UP_CONVERSATION", true)
+        val currentBtMode = prefs.getString("BLUETOOTH_BUTTON_BEHAVIOR", "LONG_PRESS_HOOK")
 
         btnDefaultLangSwitch.text = "DEF: ${defaultLang.substring(0, 3).uppercase()}"
-        updateContactRulesButtonLabel()
-        updateTelemetryReadout()
-        checkAndRequestSystemPermissions()
+        btnBtConfig.text = when(currentBtMode) {
+            "SINGLE_CLICK_HOOK" -> "BT: 1-CLICK"
+            "VOICE_ASSIST_KEY" -> "BT: VOICE KEY"
+            "DOUBLE_CLICK_NEXT" -> "BT: NEXT KEY"
+            else -> "BT: LONG PRESS"
+        }
 
-        // 1. Switch Persona (JARVIS <-> FRIDAY)
+        updateContactRulesButtonLabel()
+        checkAndRequestSystemPermissions()
+        requestBatteryExemption()
+
+        // 1. Send Text Prompt in Chat
+        btnSendChat.setOnClickListener {
+            val userText = etChatInput.text.toString().trim()
+            if (userText.isNotBlank()) {
+                etChatInput.text.clear()
+                appendChatMessage("YOU: $userText", "#ECEFF1")
+                activityScope.launch {
+                    arcReactorView.setCoreState(true)
+                    val response = aiRouter.processDirectTextPrompt(userText, activePersona)
+                    arcReactorView.setCoreState(false)
+                    appendChatMessage("[${activePersona.name}]: $response", if (activePersona == AssistantPersona.JARVIS) "#00E5FF" else "#FF5722")
+                    voiceManager.speak(response, activePersona)
+                }
+            }
+        }
+
+        // 2. Toggle Persona (JARVIS <-> FRIDAY)
         btnTogglePersona.setOnClickListener {
             activePersona = if (activePersona == AssistantPersona.JARVIS) {
                 btnTogglePersona.text = "FRIDAY"
                 btnTogglePersona.setTextColor(Color.parseColor("#FF5722"))
                 btnTogglePersona.setBackgroundColor(Color.parseColor("#381308"))
                 arcReactorView.setPersona(AssistantPersona.FRIDAY)
-                logToTerminal("Active persona switched to F.R.I.D.A.Y.")
+                appendChatMessage("[SYS]: Active persona changed to F.R.I.D.A.Y.", "#FF5722")
                 AssistantPersona.FRIDAY
             } else {
                 btnTogglePersona.text = "JARVIS"
                 btnTogglePersona.setTextColor(Color.parseColor("#00E5FF"))
-                btnTogglePersona.setBackgroundColor(Color.parseColor("#132B45"))
+                btnTogglePersona.setBackgroundColor(Color.parseColor("#122C4A"))
                 arcReactorView.setPersona(AssistantPersona.JARVIS)
-                logToTerminal("Active persona switched to J.A.R.V.I.S.")
+                appendChatMessage("[SYS]: Active persona changed to J.A.R.V.I.S.", "#00E5FF")
                 AssistantPersona.JARVIS
             }
         }
 
-        // 2. Global Default Voicemail / SMS Translation Selector
+        // 3. Global Voicemail / SMS Translation Selector
         btnDefaultLangSwitch.setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Select Default Voicemail/SMS Translation Language")
+                .setTitle("Select Global Translation Language")
                 .setItems(supportedLanguages) { _, which ->
                     val chosen = supportedLanguages[which]
                     prefs.edit().putString("MESSAGE_LANGUAGE", chosen).apply()
                     btnDefaultLangSwitch.text = "DEF: ${chosen.substring(0, 3).uppercase()}"
-                    logToTerminal("Default global message language set to: $chosen")
+                    appendChatMessage("[SYS]: Global voicemail language updated to $chosen", "#00E5FF")
                 }
                 .show()
         }
 
-        // 3. Per-Contact Custom Language Rule Manager
+        // 4. Per-Contact Translation Rules
         btnManageContactLangs.setOnClickListener {
             showContactRuleManagerDialog()
         }
 
-        // 4. Toggle Follow-Up Conversation Mode
-        tvFollowUpStat.setOnClickListener {
-            isFollowUpEnabled = !isFollowUpEnabled
-            prefs.edit().putBoolean("FOLLOW_UP_CONVERSATION", isFollowUpEnabled).apply()
-            tvFollowUpStat.text = "FOLLOW-UP: ${if (isFollowUpEnabled) "ON" else "OFF"}"
-            tvFollowUpStat.setTextColor(if (isFollowUpEnabled) Color.parseColor("#00E676") else Color.parseColor("#EF5350"))
-            logToTerminal("Follow-up dialogue state: ${if (isFollowUpEnabled) "ENABLED" else "DISABLED"}")
-        }
-
-        // 5. Start / Restart Core Standby Foreground Service
-        btnStartService.setOnClickListener {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                val serviceIntent = Intent(this, AssistantForegroundService::class.java)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(serviceIntent)
-                } else {
-                    startService(serviceIntent)
+        // 5. Bluetooth Headset Button Behavior Selector
+        btnBtConfig.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Select Bluetooth Headset Wake Trigger")
+                .setItems(btOptions) { _, which ->
+                    val selectedKey = btKeys[which]
+                    prefs.edit().putString("BLUETOOTH_BUTTON_BEHAVIOR", selectedKey).apply()
+                    btnBtConfig.text = when(selectedKey) {
+                        "SINGLE_CLICK_HOOK" -> "BT: 1-CLICK"
+                        "VOICE_ASSIST_KEY" -> "BT: VOICE KEY"
+                        "DOUBLE_CLICK_NEXT" -> "BT: NEXT KEY"
+                        else -> "BT: LONG PRESS"
+                    }
+                    appendChatMessage("[SYS]: Headset trigger assigned to: ${btOptions[which]}", "#FFD54F")
                 }
-                logToTerminal("Foreground continuous core activated.")
-            } else {
-                Toast.makeText(this, "Microphone permission required first.", Toast.LENGTH_SHORT).show()
-                checkAndRequestSystemPermissions()
-            }
+                .show()
         }
 
-        // 6. Permissions Verification
+        // 6. Start Foreground Service
+        btnStartService.setOnClickListener {
+            startCoreService()
+        }
+
+        // 7. Check Permissions
         btnPermissions.setOnClickListener {
             validateAndRequestPermissions()
         }
 
-        // 7. Interactive Arc Core Tap
+        // 8. Tap Arc Core
         arcReactorView.setOnClickListener {
-            logToTerminal("Manual HUD core trigger engaged.")
-            val voiceManager = VoiceManager(this)
-            voiceManager.speak("Systems operational, sir. Awaiting orders.", activePersona)
+            val prompt = "Greetings, sir."
+            appendChatMessage("[JARVIS]: $prompt", "#00E5FF")
+            voiceManager.speak("Systems operational, sir. Standing by.", activePersona)
+        }
+    }
+
+    private fun appendChatMessage(message: String, hexColor: String) {
+        val currentText = tvChatFeed.text.toString()
+        val newText = "$currentText\n\n$message"
+        tvChatFeed.text = newText
+        scrollChat.post { scrollChat.fullScroll(ScrollView.FOCUS_DOWN) }
+    }
+
+    private fun startCoreService() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            val serviceIntent = Intent(this, AssistantForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+            appendChatMessage("[SYS]: 24/7 background listener activated.", "#00E676")
+        } else {
+            Toast.makeText(this, "Microphone permission required.", Toast.LENGTH_SHORT).show()
+            checkAndRequestSystemPermissions()
         }
     }
 
@@ -151,20 +226,22 @@ class MainActivity : AppCompatActivity() {
 
         val contacts = contactManager.getAllDeviceContacts()
         if (contacts.isEmpty()) {
-            Toast.makeText(this, "No contacts found or phonebook is empty.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "No contacts found.", Toast.LENGTH_SHORT).show()
             return
         }
 
         val contactNames = contacts.map { "${it.name} (${contactManager.getLanguageForContact(it.name, "Default")})" }.toTypedArray()
 
         AlertDialog.Builder(this)
-            .setTitle("Select Contact to Assign Voicemail Language")
+            .setTitle("Select Contact to Assign Translation Language")
             .setItems(contactNames) { _, which ->
                 val selectedContact = contacts[which]
                 showLanguageSelectorForContact(selectedContact.name)
             }
-            .setNeutralButton("View Active Rules") { _, _ ->
-                showActiveRulesSummary()
+            .setNeutralButton("View Rules") { _, _ ->
+                val rules = contactManager.getAllCustomContactRules()
+                val text = if (rules.isEmpty()) "No custom contact rules assigned." else rules.entries.joinToString("\n") { "• ${it.key}: ${it.value}" }
+                AlertDialog.Builder(this).setTitle("Active Contact Rules").setMessage(text).setPositiveButton("OK", null).show()
             }
             .setNegativeButton("Cancel", null)
             .show()
@@ -173,28 +250,18 @@ class MainActivity : AppCompatActivity() {
     private fun showLanguageSelectorForContact(contactName: String) {
         val options = arrayOf("Default", *supportedLanguages, "Remove Rule")
         AlertDialog.Builder(this)
-            .setTitle("Assign Voicemail Language for $contactName")
+            .setTitle("Assign Language for $contactName")
             .setItems(options) { _, which ->
                 val selection = options[which]
                 if (selection == "Remove Rule" || selection == "Default") {
                     contactManager.removeContactRule(contactName)
-                    logToTerminal("Reset translation for $contactName to default")
+                    appendChatMessage("[SYS]: Reset rule for $contactName to default", "#ECEFF1")
                 } else {
                     contactManager.setLanguageForContact(contactName, selection)
-                    logToTerminal("Assigned $selection translation for $contactName")
+                    appendChatMessage("[SYS]: Assigned $selection translation for $contactName", "#00E676")
                 }
                 updateContactRulesButtonLabel()
             }
-            .show()
-    }
-
-    private fun showActiveRulesSummary() {
-        val rules = contactManager.getAllCustomContactRules()
-        val text = if (rules.isEmpty()) "No custom contact rules assigned." else rules.entries.joinToString("\n") { "• ${it.key}: ${it.value}" }
-        AlertDialog.Builder(this)
-            .setTitle("Active Contact Voicemail Rules")
-            .setMessage(text)
-            .setPositiveButton("OK", null)
             .show()
     }
 
@@ -203,19 +270,17 @@ class MainActivity : AppCompatActivity() {
         btnManageContactLangs.text = "RULES ($count)"
     }
 
-    private fun updateTelemetryReadout() {
-        val batteryIntent = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-        val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-        val batteryPct = (level * 100 / scale.toFloat()).toInt()
-        tvBatteryStat.text = "PWR: $batteryPct%"
-    }
-
-    private fun logToTerminal(message: String) {
-        val currentText = tvTerminalLog.text.toString()
-        val newText = "$currentText\n[${System.currentTimeMillis() % 100000}] $message"
-        tvTerminalLog.text = newText
-        scrollTerminal.post { scrollTerminal.fullScroll(ScrollView.FOCUS_DOWN) }
+    @SuppressLint("BatteryLife")
+    private fun requestBatteryExemption() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+            }
+            try {
+                startActivity(intent)
+            } catch (_: Exception) {}
+        }
     }
 
     private fun checkAndRequestSystemPermissions() {
@@ -247,9 +312,9 @@ class MainActivity : AppCompatActivity() {
                 Uri.parse("package:$packageName")
             )
             startActivity(intent)
-            logToTerminal("Overlay permission requested.")
+            appendChatMessage("[SYS]: Overlay permission requested.", "#FFD54F")
         } else {
-            logToTerminal("All system permissions validated.")
+            appendChatMessage("[SYS]: All permissions validated.", "#00E676")
         }
     }
 }
