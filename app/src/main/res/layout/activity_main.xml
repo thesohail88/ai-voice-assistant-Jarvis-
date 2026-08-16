@@ -2,16 +2,18 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#050B14"
+    android:background="#03070D"
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Top Status Bar -->
+    <!-- Top Command Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:background="#091422"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:padding="12dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -24,9 +26,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
+                android:letterSpacing="0.08"
                 android:text="STARK CORE // OS v4.2"
                 android:textColor="#00E5FF"
-                android:textSize="17sp"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
             <TextView
@@ -34,34 +37,30 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:text="SYSTEM ONLINE • 24/7 STANDBY"
-                android:textColor="#00B0FF"
-                android:textSize="10sp" />
+                android:text="24/7 STANDBY • NEURAL ENGINE ACTIVE"
+                android:textColor="#4DD0E1"
+                android:textSize="9sp" />
         </LinearLayout>
 
         <Button
             android:id="@+id/btnTogglePersona"
             android:layout_width="wrap_content"
-            android:layout_height="38dp"
-            android:background="#10253F"
+            android:layout_height="36dp"
+            android:background="#132B45"
             android:fontFamily="monospace"
             android:paddingHorizontal="10dp"
-            android:text="MODE: JARVIS"
+            android:text="JARVIS"
             android:textColor="#00E5FF"
-            android:textSize="11sp" />
+            android:textSize="11sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginVertical="10dp"
-        android:background="#163758" />
-
-    <!-- Voicemail / SMS Translation & Conversation Mode Selector -->
+    <!-- Quick Config Bar (Voicemail/SMS Translation & Follow-Up Toggles) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#0A1626"
+        android:layout_marginTop="8dp"
+        android:background="#07111D"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="8dp">
@@ -72,7 +71,7 @@
             android:layout_height="34dp"
             android:layout_marginEnd="4dp"
             android:layout_weight="1"
-            android:background="#163758"
+            android:background="#0F243A"
             android:fontFamily="monospace"
             android:text="LANG: ENGLISH"
             android:textColor="#00E5FF"
@@ -84,43 +83,42 @@
             android:layout_height="34dp"
             android:layout_marginStart="4dp"
             android:layout_weight="1"
-            android:background="#163758"
+            android:background="#0F243A"
             android:fontFamily="monospace"
             android:text="FOLLOW-UP: ON"
             android:textColor="#00E676"
             android:textSize="10sp" />
     </LinearLayout>
 
-    <!-- Center Arc Reactor Interactive Visualizer -->
+    <!-- Center Reactor Interactive Visualizer -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <FrameLayout
-            android:id="@+id/arcReactorContainer"
-            android:layout_width="180dp"
-            android:layout_height="180dp"
-            android:layout_gravity="center"
-            android:background="#0A1626" />
+        <com.example.aiassistant.ArcReactorHudView
+            android:id="@+id/arcReactorView"
+            android:layout_width="190dp"
+            android:layout_height="190dp"
+            android:layout_gravity="center" />
 
         <TextView
             android:id="@+id/tvCorePrompt"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="4dp"
+            android:layout_marginBottom="6dp"
             android:fontFamily="monospace"
-            android:text="[ TAP TO SPEAK / WAKE SCRIPTING ACTIVE ]"
+            android:text="[ TAP CORE / SAY 'JARVIS' / HOLD HEADSET ]"
             android:textColor="#546E7A"
             android:textSize="10sp" />
     </FrameLayout>
 
-    <!-- Live Telemetry Readout Grid -->
+    <!-- Live Telemetry Card -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#0A1626"
+        android:background="#091422"
         android:orientation="vertical"
         android:padding="10dp">
 
@@ -128,7 +126,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:fontFamily="monospace"
-            android:text="TELEMETRY READOUT"
+            android:text="DIAGNOSTIC TELEMETRY"
             android:textColor="#78909C"
             android:textSize="9sp"
             android:textStyle="bold" />
@@ -171,12 +169,12 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Tactical Live Event Log -->
+    <!-- Live Tactical Log Terminal -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="110dp"
         android:layout_marginTop="8dp"
-        android:background="#030810"
+        android:background="#02050A"
         android:orientation="vertical"
         android:padding="8dp">
 
@@ -200,13 +198,13 @@
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
                 android:lineSpacingExtra="2dp"
-                android:text="[SYS] Neural core loaded.\n[SYS] Voicemail/SMS translation ready.\n[SYS] Headset long-press listener initialized."
+                android:text="[SYS] Neural core loaded.\n[SYS] Voicemail/SMS translation module active.\n[SYS] Headset long-press interceptor ready."
                 android:textColor="#00E5FF"
                 android:textSize="10sp" />
         </ScrollView>
     </LinearLayout>
 
-    <!-- Bottom Controls -->
+    <!-- Execution Buttons -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -216,23 +214,23 @@
         <Button
             android:id="@+id/btnStartService"
             android:layout_width="0dp"
-            android:layout_height="42dp"
+            android:layout_height="44dp"
             android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="#00E5FF"
             android:fontFamily="monospace"
             android:text="ACTIVATE CORE"
-            android:textColor="#050B14"
+            android:textColor="#03070D"
             android:textSize="11sp"
             android:textStyle="bold" />
 
         <Button
             android:id="@+id/btnPermissions"
             android:layout_width="0dp"
-            android:layout_height="42dp"
+            android:layout_height="44dp"
             android:layout_marginStart="4dp"
             android:layout_weight="1"
-            android:background="#163758"
+            android:background="#0F243A"
             android:fontFamily="monospace"
             android:text="CHECK ACCESS"
             android:textColor="#ECEFF1"
