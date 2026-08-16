@@ -19,6 +19,7 @@ class ArcReactorHudView @JvmOverloads constructor(
     private var pulseRadius = 32f
     private var animator: ValueAnimator? = null
     private var activePersona = AssistantPersona.JARVIS
+    private var isCoreActive = false
 
     init {
         startCoreAnimation()
@@ -29,14 +30,19 @@ class ArcReactorHudView @JvmOverloads constructor(
         invalidate()
     }
 
+    fun setCoreState(active: Boolean) {
+        this.isCoreActive = active
+        invalidate()
+    }
+
     private fun startCoreAnimation() {
         animator = ValueAnimator.ofFloat(0f, 360f).apply {
-            duration = 3000L
+            duration = 2400L
             repeatCount = ValueAnimator.INFINITE
             interpolator = LinearInterpolator()
             addUpdateListener {
                 rotationAngle = it.animatedValue as Float
-                pulseRadius = 28f + (sin(Math.toRadians(rotationAngle.toDouble())).toFloat() * 6f)
+                pulseRadius = 26f + (sin(Math.toRadians(rotationAngle.toDouble())).toFloat() * 7f)
                 invalidate()
             }
             start()
@@ -49,48 +55,48 @@ class ArcReactorHudView @JvmOverloads constructor(
         val cy = height / 2f
 
         val primaryColor = if (activePersona == AssistantPersona.JARVIS) {
-            Color.parseColor("#00E5FF") // Cyan / Stark Blue
+            Color.parseColor("#00E5FF")
         } else {
-            Color.parseColor("#FF5722") // Tactical Crimson / Amber
+            Color.parseColor("#FF5722")
         }
 
-        // 1. Subtle Outer Border Glow
+        // 1. Outer Concentric Halo
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = 2f
+        paint.strokeWidth = 2.5f
         paint.color = primaryColor
-        paint.alpha = 60
-        canvas.drawCircle(cx, cy, 75f, paint)
+        paint.alpha = if (isCoreActive) 160 else 70
+        canvas.drawCircle(cx, cy, 80f, paint)
 
-        // 2. Outer Segmented Ring (Rotating Clockwise)
+        // 2. Primary Segmented Shield (Clockwise)
         canvas.save()
         canvas.rotate(rotationAngle, cx, cy)
         paint.strokeWidth = 5f
-        paint.alpha = 220
-        val outerBounds = RectF(cx - 65f, cy - 65f, cx + 65f, cy + 65f)
-        canvas.drawArc(outerBounds, 0f, 65f, false, paint)
-        canvas.drawArc(outerBounds, 120f, 65f, false, paint)
-        canvas.drawArc(outerBounds, 240f, 65f, false, paint)
+        paint.alpha = 240
+        val outerRect = RectF(cx - 70f, cy - 70f, cx + 70f, cy + 70f)
+        canvas.drawArc(outerRect, 0f, 60f, false, paint)
+        canvas.drawArc(outerRect, 120f, 60f, false, paint)
+        canvas.drawArc(outerRect, 240f, 60f, false, paint)
         canvas.restore()
 
-        // 3. Inner Counter-Rotating Ring
+        // 3. Secondary Tactical Shield (Counter-Clockwise)
         canvas.save()
-        canvas.rotate(-rotationAngle * 1.6f, cx, cy)
-        paint.strokeWidth = 3f
-        paint.alpha = 140
-        val innerBounds = RectF(cx - 45f, cy - 45f, cx + 45f, cy + 45f)
-        canvas.drawArc(innerBounds, 30f, 45f, false, paint)
-        canvas.drawArc(innerBounds, 150f, 45f, false, paint)
-        canvas.drawArc(innerBounds, 270f, 45f, false, paint)
+        canvas.rotate(-rotationAngle * 1.8f, cx, cy)
+        paint.strokeWidth = 3.5f
+        paint.alpha = 180
+        val innerRect = RectF(cx - 50f, cy - 50f, cx + 50f, cy + 50f)
+        canvas.drawArc(innerRect, 30f, 40f, false, paint)
+        canvas.drawArc(innerRect, 150f, 40f, false, paint)
+        canvas.drawArc(innerRect, 270f, 40f, false, paint)
         canvas.restore()
 
-        // 4. Center Glowing Vibranium Core
+        // 4. Center Core
         paint.style = Paint.Style.FILL
         paint.color = primaryColor
-        paint.alpha = 90
-        canvas.drawCircle(cx, cy, pulseRadius + 6f, paint)
+        paint.alpha = 110
+        canvas.drawCircle(cx, cy, pulseRadius + 8f, paint)
 
         paint.color = Color.WHITE
-        paint.alpha = 240
+        paint.alpha = 255
         canvas.drawCircle(cx, cy, pulseRadius - 4f, paint)
     }
 
