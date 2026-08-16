@@ -27,12 +27,15 @@ class AssistantForegroundService : Service() {
     private lateinit var assistantMemory: AssistantMemory
     private lateinit var aiRouter: UnifiedAiRouter
     private lateinit var screenWakeHelper: ScreenWakeHelper
+    private lateinit var hudOverlayManager: HudOverlayManager
+    private lateinit var proactiveTelemetryMonitor: ProactiveTelemetryMonitor
+    private lateinit var audioManager: AudioManager
+    
     private var audioRecorder: ContinuousAudioRecorder? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO)
-    private lateinit var audioManager: AudioManager
 
-    // Dynamically loaded from BuildConfig without exposing plaintext secrets in git
+    // Loaded dynamically via BuildConfig from local.properties
     private val keyConfig = ApiKeyConfig(
         groqKey = BuildConfig.GROQ_KEY,
         geminiKey = BuildConfig.GEMINI_KEY,
@@ -46,8 +49,10 @@ class AssistantForegroundService : Service() {
         assistantMemory = AssistantMemory(this)
         aiRouter = UnifiedAiRouter(keyConfig, this)
         screenWakeHelper = ScreenWakeHelper(this)
+        hudOverlayManager = HudOverlayManager(this)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+        // Persistent CPU WakeLock ensuring 24/7 background execution
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -58,21 +63,52 @@ class AssistantForegroundService : Service() {
         }
 
         requestContinuousAudioFocus()
+        startServiceInForeground()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                1001,
-                createNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            )
-        } else {
-            startForeground(1001, createNotification())
+        // Hook proactive hardware/battery alerts
+        proactiveTelemetryMonitor = ProactiveTelemetryMonitor(this) { alertText, persona ->
+            serviceScope.launch {
+                screenWakeHelper.wakeScreen(5000L)
+                hudOverlayManager.showListeningHud(persona)
+                voiceManager.speak(alertText, persona)
+                delay(4000)
+                hudOverlayManager.hideHud()
+            }
+        }
+        proactiveTelemetryMonitor.startMonitoring()
+
+        // Hook incoming messaging listener (WhatsApp, Telegram, SMS)
+        NotificationInterceptorService.onNotificationReceived = { sender, message, app ->
+            serviceScope.launch {
+                val prompt = "Incoming $app message from $sender: '$message'. Give a 1-sentence tactical briefing."
+                val (persona, reply) = aiRouter.processVoiceAudio(ByteArray(0), assistantMemory) // or route via direct prompt
+                val speech = reply ?: "Sir, $sender sent a message on $app: $message"
+                
+                screenWakeHelper.wakeScreen(6000L)
+                hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
+                voiceManager.speak(speech, AssistantPersona.JARVIS)
+                delay(5000)
+                hudOverlayManager.hideHud()
+            }
         }
 
         serviceScope.launch {
-            delay(1000)
+            delay(1200)
             voiceManager.speak("Systems operational, sir. Standing by on lock screen.", AssistantPersona.JARVIS)
             startContinuousListening()
+        }
+    }
+
+    private fun startServiceInForeground() {
+        val notification = createNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                1001,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            )
+        } else {
+            startForeground(1001, notification)
         }
     }
 
@@ -102,9 +138,15 @@ class AssistantForegroundService : Service() {
             serviceScope.launch {
                 val (persona, response) = aiRouter.processVoiceAudio(audioBytes, assistantMemory)
                 if (persona != null && !response.isNullOrBlank()) {
+                    // Instantly awaken display, trigger haptics, and display Arc Reactor HUD
                     screenWakeHelper.wakeScreen(8000L)
+                    hudOverlayManager.showListeningHud(persona)
+
                     deviceController.handleActionCommand(response)
                     voiceManager.speak(response, persona)
+
+                    delay(5000)
+                    hudOverlayManager.hideHud()
                 }
             }
         }
@@ -120,10 +162,10 @@ class AssistantForegroundService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "JARVIS Live Core",
+                "JARVIS Core Engine",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Continuous lock-screen standby active"
+                description = "Continuous voice recognition and lock-screen standby"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
@@ -150,6 +192,8 @@ class AssistantForegroundService : Service() {
 
     override fun onDestroy() {
         audioRecorder?.stopListening()
+        proactiveTelemetryMonitor.stopMonitoring()
+        hudOverlayManager.hideHud()
         wakeLock?.let { if (it.isHeld) it.release() }
         voiceManager.shutdown()
         super.onDestroy()
