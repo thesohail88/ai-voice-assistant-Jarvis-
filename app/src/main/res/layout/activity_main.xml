@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:background="#050B14"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:padding="16dp">
 
     <!-- Top Header Bar -->
     <LinearLayout
@@ -45,7 +45,7 @@
             android:layout_height="36dp"
             android:background="#10253F"
             android:fontFamily="monospace"
-            android:paddingHorizontal="12dp"
+            android:paddingHorizontal="10dp"
             android:text="MODE: JARVIS"
             android:textColor="#00E5FF"
             android:textSize="11sp" />
@@ -54,8 +54,39 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:layout_marginVertical="14dp"
+        android:layout_marginVertical="10dp"
         android:background="#163758" />
+
+    <!-- SMS / Voicemail Language Selector Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#0A1626"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:text="VOICEMAIL / SMS LANG:"
+            android:textColor="#78909C"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnLangSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:background="#163758"
+            android:fontFamily="monospace"
+            android:paddingHorizontal="12dp"
+            android:text="LANG: ENGLISH"
+            android:textColor="#00E5FF"
+            android:textSize="11sp" />
+    </LinearLayout>
 
     <!-- Center Arc Reactor Interactive Core -->
     <FrameLayout
@@ -65,8 +96,8 @@
 
         <FrameLayout
             android:id="@+id/arcReactorContainer"
-            android:layout_width="220dp"
-            android:layout_height="220dp"
+            android:layout_width="190dp"
+            android:layout_height="190dp"
             android:layout_gravity="center" />
 
         <TextView
@@ -74,11 +105,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="10dp"
+            android:layout_marginBottom="6dp"
             android:fontFamily="monospace"
             android:text="[ TAP CORE OR SAY 'JARVIS' ]"
             android:textColor="#546E7A"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
     </FrameLayout>
 
     <!-- Telemetry Diagnostic Grid -->
@@ -87,7 +118,7 @@
         android:layout_height="wrap_content"
         android:background="#0A1626"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="10dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -101,7 +132,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:orientation="horizontal">
 
             <TextView
@@ -112,7 +143,7 @@
                 android:fontFamily="monospace"
                 android:text="PWR: 100%"
                 android:textColor="#ECEFF1"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/tvAudioStat"
@@ -122,7 +153,7 @@
                 android:fontFamily="monospace"
                 android:text="MIC: ACTIVE"
                 android:textColor="#00E5FF"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <TextView
                 android:id="@+id/tvNetworkStat"
@@ -132,18 +163,18 @@
                 android:fontFamily="monospace"
                 android:text="LAN: SECURE"
                 android:textColor="#00E676"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
         </LinearLayout>
     </LinearLayout>
 
     <!-- Real-Time Activity Terminal -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="130dp"
-        android:layout_marginTop="12dp"
+        android:layout_height="110dp"
+        android:layout_marginTop="8dp"
         android:background="#030810"
         android:orientation="vertical"
-        android:padding="10dp">
+        android:padding="8dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -157,15 +188,15 @@
             android:id="@+id/scrollTerminal"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_marginTop="4dp">
+            android:layout_marginTop="2dp">
 
             <TextView
                 android:id="@+id/tvTerminalLog"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:lineSpacingExtra="3dp"
-                android:text="[SYS] Live neural core loaded.\n[SYS] Background DSP listening thread active.\n[SYS] Standing by for instructions..."
+                android:lineSpacingExtra="2dp"
+                android:text="[SYS] Live neural core loaded.\n[SYS] Voicemail/SMS Translation module ready.\n[SYS] Standing by..."
                 android:textColor="#00E5FF"
                 android:textSize="11sp" />
         </ScrollView>
@@ -175,14 +206,14 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="10dp"
         android:orientation="horizontal">
 
         <Button
             android:id="@+id/btnStartService"
             android:layout_width="0dp"
-            android:layout_height="46dp"
-            android:layout_marginEnd="6dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="#00E5FF"
             android:fontFamily="monospace"
@@ -193,8 +224,8 @@
         <Button
             android:id="@+id/btnPermissions"
             android:layout_width="0dp"
-            android:layout_height="46dp"
-            android:layout_marginStart="6dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
             android:layout_weight="1"
             android:background="#163758"
             android:fontFamily="monospace"
