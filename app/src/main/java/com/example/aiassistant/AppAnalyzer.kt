@@ -37,6 +37,7 @@ class AppAnalyzer(private val context: Context) {
     }
 
     fun findPackageForQuery(query: String): String? {
+        if (appCache.isEmpty()) scanInstalledApps()
         val cleanQuery = query.lowercase().trim()
 
         // 1. Alias Dictionary for Instant Matching
@@ -77,8 +78,13 @@ class AppAnalyzer(private val context: Context) {
         return null
     }
 
+    fun getLaunchIntentForAppName(appName: String): Intent? {
+        val targetPackage = findPackageForQuery(appName) ?: return null
+        return context.packageManager.getLaunchIntentForPackage(targetPackage)
+    }
+
     fun getInstalledAppNamesSummary(): String {
         if (appCache.isEmpty()) scanInstalledApps()
-        return appCache.map { it.appName }.sorted().joinToString(", ")
+        return appCache.map { it.appName }.sorted().distinct().take(40).joinToString(", ")
     }
 }
