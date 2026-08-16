@@ -32,10 +32,11 @@ class AssistantForegroundService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.IO)
     private lateinit var audioManager: AudioManager
 
+    // Dynamically loaded from BuildConfig without exposing plaintext secrets in git
     private val keyConfig = ApiKeyConfig(
-        groqKey = "",
-        geminiKey = "",
-        openRouterKey = ""
+        groqKey = BuildConfig.GROQ_KEY,
+        geminiKey = BuildConfig.GEMINI_KEY,
+        openRouterKey = BuildConfig.OPENROUTER_KEY
     )
 
     override fun onCreate() {
@@ -47,9 +48,11 @@ class AssistantForegroundService : Service() {
         screenWakeHelper = ScreenWakeHelper(this)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        // Request continuous CPU wake lock
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIAssistant::LockScreenListeningLock").apply {
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "AIAssistant::LockScreenListeningLock"
+        ).apply {
             setReferenceCounted(false)
             acquire(24 * 60 * 60 * 1000L)
         }
@@ -86,7 +89,11 @@ class AssistantForegroundService : Service() {
             audioManager.requestAudioFocus(focusRequest)
         } else {
             @Suppress("DEPRECATION")
-            audioManager.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            audioManager.requestAudioFocus(
+                null,
+                AudioManager.STREAM_VOICE_CALL,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+            )
         }
     }
 
@@ -95,9 +102,7 @@ class AssistantForegroundService : Service() {
             serviceScope.launch {
                 val (persona, response) = aiRouter.processVoiceAudio(audioBytes, assistantMemory)
                 if (persona != null && !response.isNullOrBlank()) {
-                    // Turn on screen & vibrate immediately when wake word detected
                     screenWakeHelper.wakeScreen(8000L)
-                    
                     deviceController.handleActionCommand(response)
                     voiceManager.speak(response, persona)
                 }
@@ -126,7 +131,9 @@ class AssistantForegroundService : Service() {
 
         val openAppIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, openAppIntent,
+            this,
+            0,
+            openAppIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
