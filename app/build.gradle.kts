@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
+}
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        load(localPropertiesFile.inputStream())
+    }
 }
 
 android {
@@ -14,6 +23,19 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+
+        // Expose secrets to BuildConfig safely
+        val groqKey = localProperties.getProperty("GROQ_API_KEY", "")
+        val geminiKey = localProperties.getProperty("GEMINI_API_KEY", "")
+        val openRouterKey = localProperties.getProperty("OPENROUTER_API_KEY", "")
+
+        buildConfigField("String", "GROQ_KEY", "\"$groqKey\"")
+        buildConfigField("String", "GEMINI_KEY", "\"$geminiKey\"")
+        buildConfigField("String", "OPENROUTER_KEY", "\"$openRouterKey\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     buildTypes {
@@ -25,10 +47,12 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = "17"
     }
