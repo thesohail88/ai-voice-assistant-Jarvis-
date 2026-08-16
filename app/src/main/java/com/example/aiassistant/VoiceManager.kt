@@ -1,13 +1,8 @@
 package com.example.aiassistant
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioManager
-import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,9 +29,9 @@ class VoiceManager(private val context: Context, private val elevenLabsApiKey: S
     private val scope = CoroutineScope(Dispatchers.IO)
     private var mediaPlayer: MediaPlayer? = null
 
-    // Exact voice model IDs matching the MCU acoustic pitch and accent
-    private val jarvisVoiceId = "pNInz6obpgDQGcFmaJgB" // Deep British gentleman timbre (Paul Bettany profile)
-    private val fridayVoiceId = "EXAVITQu4vr4xnSDxMaL" // Crisp Irish tactical female timbre (Kerry Condon profile)
+    // Exact voice IDs for MCU timbre matching
+    private val jarvisVoiceId = "pNInz6obpgDQGcFmaJgB" // Paul Bettany British gentleman timbre
+    private val fridayVoiceId = "EXAVITQu4vr4xnSDxMaL" // Kerry Condon Irish tactical timbre
 
     init {
         tts = TextToSpeech(context) { status ->
@@ -56,7 +51,6 @@ class VoiceManager(private val context: Context, private val elevenLabsApiKey: S
                 val streamed = streamNeuralVoice(cleanSpeech, persona)
                 if (streamed) return@launch
             }
-            // Fallback to local DSP-enhanced TTS engine
             speakLocalFallback(cleanSpeech, persona)
         }
     }
@@ -99,9 +93,7 @@ class VoiceManager(private val context: Context, private val elevenLabsApiKey: S
                     }
                 }
                 true
-            } else {
-                false
-            }
+            } else false
         } catch (e: Exception) {
             Log.e("VoiceManager", "Neural TTS failed, defaulting to local fallback", e)
             false
@@ -113,12 +105,12 @@ class VoiceManager(private val context: Context, private val elevenLabsApiKey: S
 
         if (persona == AssistantPersona.JARVIS) {
             tts?.language = Locale.UK
-            tts?.setPitch(0.85f)      // Lower vocal register for British resonance
-            tts?.setSpeechRate(0.95f)  // Calm, deliberate delivery
+            tts?.setPitch(0.85f)
+            tts?.setSpeechRate(0.95f)
         } else {
             tts?.language = Locale.UK
-            tts?.setPitch(1.15f)      // Higher frequency tactical female tone
-            tts?.setSpeechRate(1.05f)  // Quick tactical tempo
+            tts?.setPitch(1.15f)
+            tts?.setSpeechRate(1.05f)
         }
 
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "UTTERANCE_ID")
