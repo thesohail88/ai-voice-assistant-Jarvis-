@@ -25,7 +25,6 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -36,7 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTogglePersona: Button
     private lateinit var btnDefaultLangSwitch: Button
     private lateinit var btnManageContactLangs: Button
-    private lateinit var btnBtConfig: Button
+    private lateinit var btnTestVoiceSample: Button
     private lateinit var btnStartService: Button
     private lateinit var btnPermissions: Button
     private lateinit var arcReactorView: ArcReactorHudView
@@ -49,20 +48,6 @@ class MainActivity : AppCompatActivity() {
 
     private val supportedLanguages = arrayOf(
         "English", "Hindi", "Spanish", "French", "German", "Japanese", "Russian", "Arabic"
-    )
-
-    private val btOptions = arrayOf(
-        "Long Press Hook (Default)",
-        "Single Click Play/Pause",
-        "Dedicated Voice Assist Key",
-        "Next Track Key"
-    )
-
-    private val btKeys = arrayOf(
-        "LONG_PRESS_HOOK",
-        "SINGLE_CLICK_HOOK",
-        "VOICE_ASSIST_KEY",
-        "DOUBLE_CLICK_NEXT"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,28 +70,19 @@ class MainActivity : AppCompatActivity() {
         btnTogglePersona = findViewById(R.id.btnTogglePersona)
         btnDefaultLangSwitch = findViewById(R.id.btnDefaultLangSwitch)
         btnManageContactLangs = findViewById(R.id.btnManageContactLangs)
-        btnBtConfig = findViewById(R.id.btnBtConfig)
+        btnTestVoiceSample = findViewById(R.id.btnTestVoiceSample)
         btnStartService = findViewById(R.id.btnStartService)
         btnPermissions = findViewById(R.id.btnPermissions)
         arcReactorView = findViewById(R.id.arcReactorView)
 
         val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
         val defaultLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
-        val currentBtMode = prefs.getString("BLUETOOTH_BUTTON_BEHAVIOR", "LONG_PRESS_HOOK")
 
         btnDefaultLangSwitch.text = "DEF: ${defaultLang.substring(0, 3).uppercase()}"
-        btnBtConfig.text = when(currentBtMode) {
-            "SINGLE_CLICK_HOOK" -> "BT: 1-CLICK"
-            "VOICE_ASSIST_KEY" -> "BT: VOICE KEY"
-            "DOUBLE_CLICK_NEXT" -> "BT: NEXT KEY"
-            else -> "BT: LONG PRESS"
-        }
-
         updateContactRulesButtonLabel()
         checkAndRequestSystemPermissions()
         requestBatteryExemption()
 
-        // 1. Send Text Prompt in Chat
         btnSendChat.setOnClickListener {
             val userText = etChatInput.text.toString().trim()
             if (userText.isNotBlank()) {
@@ -122,12 +98,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 2. Toggle Persona (JARVIS <-> FRIDAY)
         btnTogglePersona.setOnClickListener {
             activePersona = if (activePersona == AssistantPersona.JARVIS) {
                 btnTogglePersona.text = "FRIDAY"
                 btnTogglePersona.setTextColor(Color.parseColor("#FF5722"))
                 btnTogglePersona.setBackgroundColor(Color.parseColor("#381308"))
+                btnTestVoiceSample.setTextColor(Color.parseColor("#FF5722"))
                 arcReactorView.setPersona(AssistantPersona.FRIDAY)
                 appendChatMessage("[SYS]: Active persona changed to F.R.I.D.A.Y.", "#FF5722")
                 AssistantPersona.FRIDAY
@@ -135,16 +111,21 @@ class MainActivity : AppCompatActivity() {
                 btnTogglePersona.text = "JARVIS"
                 btnTogglePersona.setTextColor(Color.parseColor("#00E5FF"))
                 btnTogglePersona.setBackgroundColor(Color.parseColor("#122C4A"))
+                btnTestVoiceSample.setTextColor(Color.parseColor("#00E5FF"))
                 arcReactorView.setPersona(AssistantPersona.JARVIS)
                 appendChatMessage("[SYS]: Active persona changed to J.A.R.V.I.S.", "#00E5FF")
                 AssistantPersona.JARVIS
             }
         }
 
-        // 3. Global Voicemail / SMS Translation Selector
+        btnTestVoiceSample.setOnClickListener {
+            appendChatMessage("[SYS]: Playing acoustic voice sample for ${activePersona.name}...", if (activePersona == AssistantPersona.JARVIS) "#00E5FF" else "#FF5722")
+            voiceManager.playVoiceSample(activePersona)
+        }
+
         btnDefaultLangSwitch.setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Select Global Translation Language")
+                .setTitle("Select Global Voicemail/SMS Translation Language")
                 .setItems(supportedLanguages) { _, which ->
                     val chosen = supportedLanguages[which]
                     prefs.edit().putString("MESSAGE_LANGUAGE", chosen).apply()
@@ -154,43 +135,20 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
-        // 4. Per-Contact Translation Rules
         btnManageContactLangs.setOnClickListener {
             showContactRuleManagerDialog()
         }
 
-        // 5. Bluetooth Headset Button Behavior Selector
-        btnBtConfig.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle("Select Bluetooth Headset Wake Trigger")
-                .setItems(btOptions) { _, which ->
-                    val selectedKey = btKeys[which]
-                    prefs.edit().putString("BLUETOOTH_BUTTON_BEHAVIOR", selectedKey).apply()
-                    btnBtConfig.text = when(selectedKey) {
-                        "SINGLE_CLICK_HOOK" -> "BT: 1-CLICK"
-                        "VOICE_ASSIST_KEY" -> "BT: VOICE KEY"
-                        "DOUBLE_CLICK_NEXT" -> "BT: NEXT KEY"
-                        else -> "BT: LONG PRESS"
-                    }
-                    appendChatMessage("[SYS]: Headset trigger assigned to: ${btOptions[which]}", "#FFD54F")
-                }
-                .show()
-        }
-
-        // 6. Start Foreground Service
         btnStartService.setOnClickListener {
             startCoreService()
         }
 
-        // 7. Check Permissions
         btnPermissions.setOnClickListener {
             validateAndRequestPermissions()
         }
 
-        // 8. Tap Arc Core
         arcReactorView.setOnClickListener {
-            val prompt = "Greetings, sir."
-            appendChatMessage("[JARVIS]: $prompt", "#00E5FF")
+            appendChatMessage("[${activePersona.name}]: Systems operational, awaiting orders.", if (activePersona == AssistantPersona.JARVIS) "#00E5FF" else "#FF5722")
             voiceManager.speak("Systems operational, sir. Standing by.", activePersona)
         }
     }
