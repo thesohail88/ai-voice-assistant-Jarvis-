@@ -1,124 +1,91 @@
 package com.example.aiassistant
 
 import android.content.Context
-import android.media.MediaPlayer
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
+import android.speech.tts.Voice
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
 import java.util.Locale
-import java.util.concurrent.TimeUnit
 
-class VoiceManager(private val context: Context, private val elevenLabsApiKey: String = "") {
-
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
+class VoiceManager(private val context: Context) {
 
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
-    private val scope = CoroutineScope(Dispatchers.IO)
-    private var mediaPlayer: MediaPlayer? = null
-
-    // Exact voice IDs for MCU timbre matching
-    private val jarvisVoiceId = "pNInz6obpgDQGcFmaJgB" // Paul Bettany British gentleman timbre
-    private val fridayVoiceId = "EXAVITQu4vr4xnSDxMaL" // Kerry Condon Irish tactical timbre
 
     init {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 isTtsReady = true
-                tts?.language = Locale.UK
+                tts?.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
             }
         }
     }
 
     fun speak(text: String, persona: AssistantPersona) {
+        if (!isTtsReady || text.isBlank()) return
+
         val cleanSpeech = text.replace(Regex("ACTION_[A-Z_:]+.*"), "").trim()
         if (cleanSpeech.isBlank()) return
 
-        scope.launch {
-            if (elevenLabsApiKey.isNotBlank()) {
-                val streamed = streamNeuralVoice(cleanSpeech, persona)
-                if (streamed) return@launch
-            }
-            speakLocalFallback(cleanSpeech, persona)
-        }
-    }
-
-    private fun streamNeuralVoice(text: String, persona: AssistantPersona): Boolean {
-        return try {
-            val voiceId = if (persona == AssistantPersona.JARVIS) jarvisVoiceId else fridayVoiceId
-            val url = "https://api.elevenlabs.io/v1/text-to-speech/$voiceId?output_format=mp3_44100_128"
-
-            val json = JSONObject().apply {
-                put("text", text)
-                put("model_id", "eleven_turbo_v2_5")
-                put("voice_settings", JSONObject().apply {
-                    put("stability", if (persona == AssistantPersona.JARVIS) 0.65 else 0.50)
-                    put("similarity_boost", 0.85)
-                    put("style", 0.35)
-                    put("use_speaker_boost", true)
-                })
+        try {
+            if (persona == AssistantPersona.JARVIS) {
+                applyJarvisAcoustics()
+            } else {
+                applyFridayAcoustics()
             }
 
-            val request = Request.Builder()
-                .url(url)
-                .addHeader("xi-api-key", elevenLabsApiKey)
-                .addHeader("Content-Type", "application/json")
-                .post(json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            if (response.isSuccessful) {
-                val tempFile = File.createTempFile("neural_voice", ".mp3", context.cacheDir)
-                FileOutputStream(tempFile).use { it.write(response.body?.bytes()) }
-
-                mediaPlayer?.release()
-                mediaPlayer = MediaPlayer().apply {
-                    setDataSource(tempFile.absolutePath)
-                    prepare()
-                    start()
-                    setOnCompletionListener {
-                        tempFile.delete()
-                    }
-                }
-                true
-            } else false
+            tts?.speak(cleanSpeech, TextToSpeech.QUEUE_FLUSH, null, "VOICE_PLAYBACK_ID")
         } catch (e: Exception) {
-            Log.e("VoiceManager", "Neural TTS failed, defaulting to local fallback", e)
-            false
+            Log.e("VoiceManager", "TTS error", e)
         }
     }
 
-    private fun speakLocalFallback(text: String, persona: AssistantPersona) {
-        if (!isTtsReady) return
-
-        if (persona == AssistantPersona.JARVIS) {
-            tts?.language = Locale.UK
-            tts?.setPitch(0.85f)
-            tts?.setSpeechRate(0.95f)
-        } else {
-            tts?.language = Locale.UK
-            tts?.setPitch(1.15f)
-            tts?.setSpeechRate(1.05f)
+    private fun applyJarvisAcoustics() {
+        tts?.language = Locale.UK
+        // Find deep British male voice available in Google TTS engine
+        val bestVoice = tts?.voices?.firstOrNull { voice ->
+            voice.locale == Locale.UK &&
+                    !voice.isNetworkConnectionRequired &&
+                    (voice.name.lowercase().contains("en-gb-x-rjs") || 
+                     voice.name.lowercase().contains("male") || 
+                     voice.features.contains("male"))
         }
 
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "UTTERANCE_ID")
+        if (bestVoice != null) {
+            tts?.voice = bestVoice
+        }
+
+        tts?.setPitch(0.82f)       // Lower pitch for resonant British tone
+        tts?.setSpeechRate(0.92f)   // Calm, composed delivery
+    }
+
+    private fun applyFridayAcoustics() {
+        val irishLocale = Locale("en", "IE")
+        val result = tts?.setLanguage(irishLocale)
+        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
+            tts?.language = Locale.UK
+        }
+
+        val bestVoice = tts?.voices?.firstOrNull { voice ->
+            (voice.locale.language == "en" && voice.locale.country == "IE") ||
+            (voice.locale == Locale.UK && voice.name.lowercase().contains("female"))
+        }
+
+        if (bestVoice != null) {
+            tts?.voice = bestVoice
+        }
+
+        tts?.setPitch(1.18f)       // Tactical female frequency
+        tts?.setSpeechRate(1.08f)   // Crisp, fast-paced tempo
     }
 
     fun shutdown() {
         tts?.stop()
         tts?.shutdown()
-        mediaPlayer?.release()
     }
 }
