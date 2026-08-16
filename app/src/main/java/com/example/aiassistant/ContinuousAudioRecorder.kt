@@ -18,12 +18,14 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
     @Volatile private var isRecording = false
     private var recordingThread: Thread? = null
 
+    // Adaptive noise tracking
+    private var noiseFloor = 180f
+
     @SuppressLint("MissingPermission")
     fun startListening() {
         if (isRecording) return
 
         try {
-            // VOICE_RECOGNITION maintains hardware mic priority in lock screen
             audioRecord = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 sampleRate,
@@ -33,7 +35,6 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
             )
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e("ContinuousRecorder", "AudioRecord init failed, trying MIC source fallback")
                 audioRecord = AudioRecord(
                     MediaRecorder.AudioSource.MIC,
                     sampleRate,
@@ -58,9 +59,9 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
                         var maxPeak = 0
                         val byteData = ByteArray(readCount * 2)
 
-                        // 3.0x Software Gain Boost for whisper and distant capture
+                        // 3.5x Dynamic Audio Pre-Amp
                         for (i in 0 until readCount) {
-                            var sample = (pcmBuffer[i] * 3.0f).toInt()
+                            var sample = (pcmBuffer[i] * 3.5f).toInt()
                             if (sample > Short.MAX_VALUE) sample = Short.MAX_VALUE.toInt()
                             if (sample < Short.MIN_VALUE) sample = Short.MIN_VALUE.toInt()
 
@@ -71,8 +72,14 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
                             byteData[i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
                         }
 
-                        // Sensitive energy trigger threshold
-                        if (maxPeak > 450) {
+                        // Auto-adjust noise floor for ambient acoustics
+                        if (!speechDetected) {
+                            noiseFloor = (noiseFloor * 0.95f) + (maxPeak * 0.05f)
+                        }
+
+                        val dynamicThreshold = (noiseFloor * 1.6f).coerceIn(250f, 1200f)
+
+                        if (maxPeak > dynamicThreshold) {
                             speechDetected = true
                             silenceFrames = 0
                         } else if (speechDetected) {
@@ -82,9 +89,9 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
                         if (speechDetected) {
                             for (b in byteData) chunkAccumulator.add(b)
 
-                            // Send chunk when user finishes sentence or hits 2.5s
-                            if (chunkAccumulator.size >= 16000 * 2 * 2.5 || silenceFrames > 12) {
-                                if (chunkAccumulator.size >= 8000) { // Minimum 0.25s audio
+                            // Sentence completion trigger (2.2s cap or 10 frames of silence)
+                            if (chunkAccumulator.size >= 16000 * 2 * 2.2 || silenceFrames > 10) {
+                                if (chunkAccumulator.size >= 6400) { // Minimum 0.2s speech
                                     onAudioChunkReady(chunkAccumulator.toByteArray())
                                 }
                                 chunkAccumulator.clear()
@@ -98,7 +105,7 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
             recordingThread?.priority = Thread.MAX_PRIORITY
             recordingThread?.start()
         } catch (e: Exception) {
-            Log.e("ContinuousRecorder", "AudioRecord start error", e)
+            Log.e("ContinuousRecorder", "Recording start failure", e)
         }
     }
 
