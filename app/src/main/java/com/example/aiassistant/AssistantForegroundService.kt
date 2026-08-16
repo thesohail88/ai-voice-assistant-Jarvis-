@@ -5,8 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -14,6 +16,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.view.KeyEvent
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +43,57 @@ class AssistantForegroundService : Service() {
         geminiKey = BuildConfig.GEMINI_KEY,
         openRouterKey = BuildConfig.OPENROUTER_KEY
     )
+
+    // Bluetooth Long-Press Detector Receiver
+    private val mediaButtonReceiver = object : BroadcastReceiver() {
+        private var buttonDownTimestamp = 0L
+
+        override fun onReceive(context: Context, intent: Intent) {
+            if (Intent.ACTION_MEDIA_BUTTON == intent.action || Intent.ACTION_VOICE_COMMAND == intent.action) {
+                val event = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                }
+
+                if (event != null) {
+                    when (event.action) {
+                        KeyEvent.ACTION_DOWN -> {
+                            buttonDownTimestamp = System.currentTimeMillis()
+                            // Keycode dedicated to assistant long-press on modern Bluetooth headsets
+                            if (event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
+                                triggerBluetoothActivation()
+                            }
+                        }
+                        KeyEvent.ACTION_UP -> {
+                            val duration = System.currentTimeMillis() - buttonDownTimestamp
+                            // Long-press detection threshold: 600ms or more
+                            if (duration >= 600 && (
+                                event.keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
+                                event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+                                event.keyCode == KeyEvent.KEYCODE_CALL
+                            )) {
+                                triggerBluetoothActivation()
+                            }
+                        }
+                    }
+                } else if (Intent.ACTION_VOICE_COMMAND == intent.action) {
+                    triggerBluetoothActivation()
+                }
+            }
+        }
+    }
+
+    private fun triggerBluetoothActivation() {
+        serviceScope.launch {
+            screenWakeHelper.wakeScreen(6000L)
+            hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
+            voiceManager.speak("Yes sir, listening through headset.", AssistantPersona.JARVIS)
+            delay(3500)
+            hudOverlayManager.hideHud()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -89,16 +143,19 @@ class AssistantForegroundService : Service() {
             }
         }
 
-        // 3. Silent Bluetooth Earbud Button Click Listener
-        MediaButtonTriggerReceiver.onMediaButtonClicked = {
-            serviceScope.launch {
-                screenWakeHelper.wakeScreen(5000L)
-                hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
-                voiceManager.speak("At your service, sir.", AssistantPersona.JARVIS)
-                delay(3000)
-                hudOverlayManager.hideHud()
+        // 3. Register Bluetooth Long-Press & Media Key Broadcast Filters
+        try {
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_MEDIA_BUTTON)
+                addAction(Intent.ACTION_VOICE_COMMAND)
+                priority = IntentFilter.SYSTEM_HIGH_PRIORITY
             }
-        }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(mediaButtonReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(mediaButtonReceiver, filter)
+            }
+        } catch (_: Exception) {}
 
         serviceScope.launch {
             delay(1200)
@@ -204,6 +261,10 @@ class AssistantForegroundService : Service() {
         audioRecorder?.stopListening()
         proactiveTelemetryMonitor.stopMonitoring()
         hudOverlayManager.hideHud()
+        try {
+            unregisterReceiver(mediaButtonReceiver)
+        } catch (_: Exception) {}
+
         val lock = wakeLock
         if (lock != null && lock.isHeld) {
             lock.release()
