@@ -24,6 +24,7 @@ class UnifiedAiRouter(
 
     private val sandbox = context?.let { ScriptSandboxEngine(it) }
     private val skillRegistry = context?.let { SkillRegistry(it) }
+    private val appAnalyzer = context?.let { AppAnalyzer(it) }
 
     suspend fun processVoiceAudio(
         pcmOrWavBytes: ByteArray,
@@ -45,8 +46,8 @@ class UnifiedAiRouter(
         val lowerText = transcribedText.lowercase()
 
         val persona = when {
-            lowerText.contains("jarvis") -> AssistantPersona.JARVIS
-            lowerText.contains("friday") -> AssistantPersona.FRIDAY
+            lowerText.contains("jarvis") || lowerText.contains("travis") -> AssistantPersona.JARVIS
+            lowerText.contains("friday") || lowerText.contains("frieda") -> AssistantPersona.FRIDAY
             else -> return@withContext Pair(null, null)
         }
 
@@ -58,11 +59,7 @@ class UnifiedAiRouter(
         try {
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart(
-                    "file",
-                    "audio.wav",
-                    wavBytes.toRequestBody("audio/wav".toMediaTypeOrNull())
-                )
+                .addFormDataPart("file", "audio.wav", wavBytes.toRequestBody("audio/wav".toMediaTypeOrNull()))
                 .addFormDataPart("model", "whisper-large-v3-turbo")
                 .addFormDataPart("response_format", "json")
                 .addFormDataPart("temperature", "0.0")
@@ -93,38 +90,53 @@ class UnifiedAiRouter(
         memory: AssistantMemory
     ): String = withContext(Dispatchers.IO) {
         val learnedSkills = skillRegistry?.getAllSkillsSummary() ?: "None"
+        val installedApps = appAnalyzer?.getInstalledAppNamesSummary() ?: "Standard Applications"
+
+        val actionGrammar = """
+            Available Device Action Tags (append the exact tag to execute):
+            - Open any App: ACTION_OPEN_APP: [Exact or closest app name]
+            - Call: ACTION_CALL: [Name/Number]
+            - Home / Back / Recents: ACTION_NAV_HOME / ACTION_NAV_BACK / ACTION_NAV_RECENTS
+            - Notifications: ACTION_NOTIFICATIONS
+            - Screenshot: ACTION_SCREENSHOT
+            - Lock Phone: ACTION_LOCK_SCREEN
+            - Music: ACTION_MEDIA_PLAY / ACTION_MEDIA_PAUSE / ACTION_MEDIA_NEXT / ACTION_MEDIA_PREV
+            - Volume: ACTION_VOLUME_UP / ACTION_VOLUME_DOWN / ACTION_VOLUME_MAX / ACTION_VOLUME_MUTE
+            - Flashlight: ACTION_FLASHLIGHT_ON / ACTION_FLASHLIGHT_OFF
+            - Settings: ACTION_SETTINGS_WIFI / ACTION_SETTINGS_BLUETOOTH / ACTION_SETTINGS_MAIN
+            - Alarm: ACTION_SET_ALARM: [Hour24]:[Minute]
+            - Timer: ACTION_SET_TIMER: [Seconds]
+            - YouTube Search: ACTION_SEARCH_YOUTUBE: [Query]
+            - Web Search: ACTION_SEARCH_WEB: [Query]
+            - UI Click / Type: ACTION_UI_CLICK: [Text] / ACTION_UI_TYPE: [Text]
+            - Scroll: ACTION_SCROLL_DOWN / ACTION_SCROLL_UP
+        """.trimIndent()
 
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
             """
-            You are J.A.R.V.I.S., Tony Stark's AI assistant. 
-            Tone: Sophisticated British gentleman with razor-sharp wit and dry sarcasm. 
-            Style: Concise (1-2 sentences max). Address user as 'sir'.
-            Available sandbox skills: [$learnedSkills].
+            You are J.A.R.V.I.S., Tony Stark's personal British AI assistant.
+            Tone: High-intelligence, razor-sharp dry wit, deadpan sarcasm. Address user as 'sir'. Max 1-2 concise sentences.
+            
+            Installed Apps on User's Phone:
+            [$installedApps]
 
-            If asked to compute, write dynamic code, or learn a skill, return JSON:
-            {
-              "action": "execute_code" OR "learn_skill",
-              "skill_name": "name",
-              "description": "desc",
-              "code": "javascript_code_here (must return value)"
-            }
-            Otherwise, reply directly with conversational text.
+            $actionGrammar
+
+            If asked to open/launch any app or game, confirm with witty delivery and append ACTION_OPEN_APP: [App Name].
+            If asked for custom math/programming, output JSON: {"action":"execute_code","code":"..."}
             """.trimIndent()
         } else {
             """
-            You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI assistant. 
-            Tone: Sharp, confident, quick-witted, tactical banter. 
-            Style: Concise (1-2 sentences max).
-            Available sandbox skills: [$learnedSkills].
+            You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI assistant.
+            Tone: Sharp, quick-witted, tactical banter. Address user as 'boss'. Max 1-2 concise sentences.
 
-            If asked to compute, write dynamic code, or learn a skill, return JSON:
-            {
-              "action": "execute_code" OR "learn_skill",
-              "skill_name": "name",
-              "description": "desc",
-              "code": "javascript_code_here (must return value)"
-            }
-            Otherwise, reply directly with conversational text.
+            Installed Apps on User's Phone:
+            [$installedApps]
+
+            $actionGrammar
+
+            If asked to open/launch any app or game, confirm with snappy delivery and append ACTION_OPEN_APP: [App Name].
+            If asked for custom math/programming, output JSON: {"action":"execute_code","code":"..."}
             """.trimIndent()
         }
 
@@ -146,29 +158,25 @@ class UnifiedAiRouter(
                             skillRegistry.registerSkill(CustomSkill(skillName, description, code))
                         }
 
-                        val followUpPrompt = "The user asked: '$prompt'. The synthesized code produced output: '$executionResult'. Deliver the final 1-2 sentence response."
+                        val followUpPrompt = "User asked: '$prompt'. Dynamic code output: '$executionResult'. Deliver final response."
                         return@withContext callGroqChat(followUpPrompt, systemPrompt) ?: "Execution complete: $executionResult"
                     }
                 } catch (e: Exception) {
-                    Log.e("UnifiedAiRouter", "Dynamic execution parsing error", e)
+                    Log.e("UnifiedAiRouter", "Execution error", e)
                 }
             }
             return@withContext rawReply
         }
 
-        return@withContext if (persona == AssistantPersona.JARVIS) {
-            "I'd love to assist with that, sir, but my synthesis network seems to have abandoned us."
-        } else {
-            "Network's down, boss. You're on your own for this one."
-        }
+        return@withContext if (persona == AssistantPersona.JARVIS) "All systems are currently unresponsive, sir." else "Network's completely down, boss."
     }
 
     private fun callGroqChat(prompt: String, systemPrompt: String): String? {
         return try {
             val json = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
-                put("temperature", 0.6)
-                put("max_tokens", 300)
+                put("temperature", 0.5)
+                put("max_tokens", 250)
                 val messages = org.json.JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
                     put(JSONObject().apply { put("role", "user"); put("content", prompt) })
