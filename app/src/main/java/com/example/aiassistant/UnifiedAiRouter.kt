@@ -94,28 +94,43 @@ class UnifiedAiRouter(
     ): String = withContext(Dispatchers.IO) {
         val learnedSkills = skillRegistry?.getAllSkillsSummary() ?: "None"
 
-        val systemPrompt = """
-            You are ${if (persona == AssistantPersona.JARVIS) "JARVIS (sophisticated, witty British butler AI)" else "FRIDAY (tactical, sharp Irish AI)"}.
-            You have a sandboxed JavaScript code execution engine.
-            Currently learned custom skills: [$learnedSkills].
+        val systemPrompt = if (persona == AssistantPersona.JARVIS) {
+            """
+            You are J.A.R.V.I.S., Tony Stark's AI assistant. 
+            Tone: Sophisticated British gentleman with razor-sharp wit and dry sarcasm. 
+            Style: Concise (1-2 sentences max). Address user as 'sir'.
+            Available sandbox skills: [$learnedSkills].
 
-            If the user asks you to perform a mathematical calculation, generate dynamic logic, write a program, or learn a new automated skill:
-            Respond STRICTLY with a JSON object:
+            If asked to compute, write dynamic code, or learn a skill, return JSON:
             {
               "action": "execute_code" OR "learn_skill",
-              "skill_name": "name_of_skill",
-              "description": "short description",
-              "code": "javascript_code_here (must return a value)",
-              "speech_template": "Spoken response summarizing the outcome with witty delivery."
+              "skill_name": "name",
+              "description": "desc",
+              "code": "javascript_code_here (must return value)"
             }
+            Otherwise, reply directly with conversational text.
+            """.trimIndent()
+        } else {
+            """
+            You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI assistant. 
+            Tone: Sharp, confident, quick-witted, tactical banter. 
+            Style: Concise (1-2 sentences max).
+            Available sandbox skills: [$learnedSkills].
 
-            If it is a regular conversation or device command, respond directly with conversational text (1-2 sentences).
-        """.trimIndent()
+            If asked to compute, write dynamic code, or learn a skill, return JSON:
+            {
+              "action": "execute_code" OR "learn_skill",
+              "skill_name": "name",
+              "description": "desc",
+              "code": "javascript_code_here (must return value)"
+            }
+            Otherwise, reply directly with conversational text.
+            """.trimIndent()
+        }
 
         val rawReply = callGroqChat(prompt, systemPrompt) ?: callOpenRouterChat(prompt, systemPrompt)
 
         if (!rawReply.isNullOrBlank()) {
-            // Check if LLM outputted dynamic code synthesis JSON
             if (rawReply.trim().startsWith("{") && rawReply.trim().endsWith("}")) {
                 try {
                     val json = JSONObject(rawReply)
@@ -131,7 +146,6 @@ class UnifiedAiRouter(
                             skillRegistry.registerSkill(CustomSkill(skillName, description, code))
                         }
 
-                        // Formulate final spoken response with code output
                         val followUpPrompt = "The user asked: '$prompt'. The synthesized code produced output: '$executionResult'. Deliver the final 1-2 sentence response."
                         return@withContext callGroqChat(followUpPrompt, systemPrompt) ?: "Execution complete: $executionResult"
                     }
@@ -143,9 +157,9 @@ class UnifiedAiRouter(
         }
 
         return@withContext if (persona == AssistantPersona.JARVIS) {
-            "I'd love to calculate that, sir, but my synthesis link is unresponsive."
+            "I'd love to assist with that, sir, but my synthesis network seems to have abandoned us."
         } else {
-            "Tool engine offline, boss. Can't run that script right now."
+            "Network's down, boss. You're on your own for this one."
         }
     }
 
@@ -153,7 +167,7 @@ class UnifiedAiRouter(
         return try {
             val json = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
-                put("temperature", 0.3)
+                put("temperature", 0.6)
                 put("max_tokens", 300)
                 val messages = org.json.JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
