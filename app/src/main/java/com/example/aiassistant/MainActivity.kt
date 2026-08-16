@@ -15,6 +15,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -46,7 +47,6 @@ class MainActivity : AppCompatActivity() {
         updateTelemetryReadout()
         checkAndRequestSystemPermissions()
 
-        // Toggle Persona Mode (JARVIS <-> FRIDAY)
         btnTogglePersona.setOnClickListener {
             activePersona = if (activePersona == AssistantPersona.JARVIS) {
                 btnTogglePersona.text = "MODE: FRIDAY"
@@ -63,23 +63,25 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Activate / Restart Background Foreground Engine
         btnStartService.setOnClickListener {
-            val serviceIntent = Intent(this, AssistantForegroundService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                val serviceIntent = Intent(this, AssistantForegroundService::class.java)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(serviceIntent)
+                } else {
+                    startService(serviceIntent)
+                }
+                logToTerminal("Foreground continuous core activated.")
             } else {
-                startService(serviceIntent)
+                Toast.makeText(this, "Microphone permission required first.", Toast.LENGTH_SHORT).show()
+                checkAndRequestSystemPermissions()
             }
-            logToTerminal("Foreground continuous core activated.")
         }
 
-        // Validate Permissions
         btnPermissions.setOnClickListener {
             validateAndRequestPermissions()
         }
 
-        // Tap Arc Reactor Core to manually trigger voice activation
         arcReactorContainer.setOnClickListener {
             logToTerminal("Manual voice trigger engaged.")
             val voiceManager = VoiceManager(this)
