@@ -19,112 +19,72 @@ import android.view.KeyEvent
 class DeviceController(private val context: Context) {
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private val appAnalyzer = AppAnalyzer(context)
-    private val accessibility: AgentAccessibilityService?
+    val appAnalyzer = AppAnalyzer(context)
+    val accessibility: AgentAccessibilityService?
         get() = AgentAccessibilityService.instance
 
-    fun handleActionCommand(response: String) {
+    fun executeSingleAction(actionTag: String): Boolean {
+        val trimmed = actionTag.trim()
         try {
             when {
-                // 1. Phone Call
-                response.contains("ACTION_CALL:") -> {
-                    val target = response.substringAfter("ACTION_CALL:").trim()
-                    makePhoneCall(target)
+                trimmed.startsWith("ACTION_OPEN_APP:") -> {
+                    openAppByName(trimmed.substringAfter("ACTION_OPEN_APP:").trim())
+                    return true
                 }
-
-                // 2. Instant App Launch
-                response.contains("ACTION_OPEN_APP:") -> {
-                    val appName = response.substringAfter("ACTION_OPEN_APP:").trim()
-                    openAppByName(appName)
+                trimmed.startsWith("ACTION_CALL:") -> {
+                    makePhoneCall(trimmed.substringAfter("ACTION_CALL:").trim())
+                    return true
                 }
-
-                // 3. Navigation & System Controls
-                response.contains("ACTION_NAV_HOME") -> accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
-                response.contains("ACTION_NAV_BACK") -> accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
-                response.contains("ACTION_NAV_RECENTS") -> accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)
-                response.contains("ACTION_NOTIFICATIONS") -> accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
-                response.contains("ACTION_QUICK_SETTINGS") -> accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS)
-                response.contains("ACTION_SCREENSHOT") -> {
+                trimmed.startsWith("ACTION_UI_CLICK:") -> {
+                    return accessibility?.clickElementByText(trimmed.substringAfter("ACTION_UI_CLICK:").trim()) ?: false
+                }
+                trimmed.startsWith("ACTION_UI_TYPE:") -> {
+                    return accessibility?.typeTextIntoFocusedNode(trimmed.substringAfter("ACTION_UI_TYPE:").trim()) ?: false
+                }
+                trimmed == "ACTION_NAV_HOME" -> return accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) ?: false
+                trimmed == "ACTION_NAV_BACK" -> return accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) ?: false
+                trimmed == "ACTION_NAV_RECENTS" -> return accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS) ?: false
+                trimmed == "ACTION_NOTIFICATIONS" -> return accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS) ?: false
+                trimmed == "ACTION_QUICK_SETTINGS" -> return accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_QUICK_SETTINGS) ?: false
+                trimmed == "ACTION_SCREENSHOT" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT)
+                        return accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) ?: false
                     }
                 }
-                response.contains("ACTION_LOCK_SCREEN") -> {
+                trimmed == "ACTION_LOCK_SCREEN" -> {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN)
+                        return accessibility?.triggerGlobalAction(AccessibilityService.GLOBAL_ACTION_LOCK_SCREEN) ?: false
                     }
                 }
-
-                // 4. Media Controls
-                response.contains("ACTION_MEDIA_PLAY") || response.contains("ACTION_MEDIA_PAUSE") -> sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                response.contains("ACTION_MEDIA_NEXT") -> sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_NEXT)
-                response.contains("ACTION_MEDIA_PREV") -> sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
-
-                // 5. Volume Adjustments
-                response.contains("ACTION_VOLUME_UP") -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
-                response.contains("ACTION_VOLUME_DOWN") -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
-                response.contains("ACTION_VOLUME_MAX") -> {
-                    val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, max, AudioManager.FLAG_SHOW_UI)
-                }
-                response.contains("ACTION_VOLUME_MUTE") -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI)
-
-                // 6. Flashlight
-                response.contains("ACTION_FLASHLIGHT_ON") -> toggleFlashlight(true)
-                response.contains("ACTION_FLASHLIGHT_OFF") -> toggleFlashlight(false)
-
-                // 7. System Settings Pages
-                response.contains("ACTION_SETTINGS_WIFI") -> openSettingsPage(Settings.ACTION_WIFI_SETTINGS)
-                response.contains("ACTION_SETTINGS_BLUETOOTH") -> openSettingsPage(Settings.ACTION_BLUETOOTH_SETTINGS)
-                response.contains("ACTION_SETTINGS_DISPLAY") -> openSettingsPage(Settings.ACTION_DISPLAY_SETTINGS)
-                response.contains("ACTION_SETTINGS_MAIN") -> openSettingsPage(Settings.ACTION_SETTINGS)
-
-                // 8. Alarms & Timers
-                response.contains("ACTION_SET_ALARM:") -> {
-                    val parts = response.substringAfter("ACTION_SET_ALARM:").trim().split(":")
-                    if (parts.size >= 2) {
-                        setAlarm(parts[0].toIntOrNull() ?: 7, parts[1].toIntOrNull() ?: 0)
-                    }
-                }
-                response.contains("ACTION_SET_TIMER:") -> {
-                    val seconds = response.substringAfter("ACTION_SET_TIMER:").trim().toIntOrNull() ?: 60
-                    setTimer(seconds)
-                }
-
-                // 9. Web & YouTube Search
-                response.contains("ACTION_SEARCH_YOUTUBE:") -> {
-                    val query = response.substringAfter("ACTION_SEARCH_YOUTUBE:").trim()
+                trimmed == "ACTION_MEDIA_PLAY" || trimmed == "ACTION_MEDIA_PAUSE" -> sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                trimmed == "ACTION_MEDIA_NEXT" -> sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_NEXT)
+                trimmed == "ACTION_MEDIA_PREV" -> sendMediaKeyEvent(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                trimmed == "ACTION_VOLUME_UP" -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                trimmed == "ACTION_VOLUME_DOWN" -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                trimmed == "ACTION_VOLUME_MAX" -> audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC), AudioManager.FLAG_SHOW_UI)
+                trimmed == "ACTION_VOLUME_MUTE" -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI)
+                trimmed == "ACTION_FLASHLIGHT_ON" -> toggleFlashlight(true)
+                trimmed == "ACTION_FLASHLIGHT_OFF" -> toggleFlashlight(false)
+                trimmed == "ACTION_SETTINGS_WIFI" -> openSettingsPage(Settings.ACTION_WIFI_SETTINGS)
+                trimmed == "ACTION_SETTINGS_BLUETOOTH" -> openSettingsPage(Settings.ACTION_BLUETOOTH_SETTINGS)
+                trimmed == "ACTION_SETTINGS_MAIN" -> openSettingsPage(Settings.ACTION_SETTINGS)
+                trimmed == "ACTION_SCROLL_DOWN" -> return accessibility?.performScroll(true) ?: false
+                trimmed == "ACTION_SCROLL_UP" -> return accessibility?.performScroll(false) ?: false
+                trimmed.startsWith("ACTION_SEARCH_YOUTUBE:") -> {
+                    val query = trimmed.substringAfter("ACTION_SEARCH_YOUTUBE:").trim()
                     val intent = Intent(Intent.ACTION_SEARCH).apply {
                         setPackage("com.google.android.youtube")
                         putExtra("query", query)
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
                     context.startActivity(intent)
+                    return true
                 }
-                response.contains("ACTION_SEARCH_WEB:") -> {
-                    val query = response.substringAfter("ACTION_SEARCH_WEB:").trim()
-                    val intent = Intent(Intent.ACTION_WEB_SEARCH).apply {
-                        putExtra(SearchManager.QUERY, query)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    context.startActivity(intent)
-                }
-
-                // 10. UI Auto-Click & Typing via Accessibility
-                response.contains("ACTION_UI_CLICK:") -> {
-                    val elementText = response.substringAfter("ACTION_UI_CLICK:").trim()
-                    accessibility?.clickElementByText(elementText)
-                }
-                response.contains("ACTION_UI_TYPE:") -> {
-                    val textToType = response.substringAfter("ACTION_UI_TYPE:").trim()
-                    accessibility?.typeTextIntoFocusedNode(textToType)
-                }
-                response.contains("ACTION_SCROLL_DOWN") -> accessibility?.performScroll(true)
-                response.contains("ACTION_SCROLL_UP") -> accessibility?.performScroll(false)
             }
         } catch (e: Exception) {
-            Log.e("DeviceController", "Action execution failure", e)
+            Log.e("DeviceController", "Action execution error on $actionTag", e)
         }
+        return false
     }
 
     fun openAppByName(appName: String) {
@@ -137,7 +97,6 @@ class DeviceController(private val context: Context) {
                 return
             }
         }
-        Log.w("DeviceController", "Could not find launchable package for: $appName")
     }
 
     @SuppressLint("MissingPermission")
@@ -174,21 +133,15 @@ class DeviceController(private val context: Context) {
                 arrayOf("%$name%"),
                 null
             )
-            cursor?.use {
-                if (it.moveToFirst()) it.getString(0) else null
-            }
+            cursor?.use { if (it.moveToFirst()) it.getString(0) else null }
         } catch (e: Exception) {
             null
         }
     }
 
     private fun sendMediaKeyEvent(keyCode: Int) {
-        val down = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
-            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-        }
-        val up = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
-            putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, keyCode))
-        }
+        val down = Intent(Intent.ACTION_MEDIA_BUTTON).apply { putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_DOWN, keyCode)) }
+        val up = Intent(Intent.ACTION_MEDIA_BUTTON).apply { putExtra(Intent.EXTRA_KEY_EVENT, KeyEvent(KeyEvent.ACTION_UP, keyCode)) }
         context.sendOrderedBroadcast(down, null)
         context.sendOrderedBroadcast(up, null)
     }
@@ -196,36 +149,13 @@ class DeviceController(private val context: Context) {
     private fun toggleFlashlight(status: Boolean) {
         try {
             val cameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-            val cameraId = cameraManager.cameraIdList[0]
-            cameraManager.setTorchMode(cameraId, status)
+            cameraManager.setTorchMode(cameraManager.cameraIdList[0], status)
         } catch (e: Exception) {
             Log.e("DeviceController", "Flashlight error", e)
         }
     }
 
     private fun openSettingsPage(action: String) {
-        val intent = Intent(action).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
-    }
-
-    private fun setAlarm(hour: Int, minute: Int) {
-        val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
-            putExtra(AlarmClock.EXTRA_HOUR, hour)
-            putExtra(AlarmClock.EXTRA_MINUTES, minute)
-            putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
-    }
-
-    private fun setTimer(seconds: Int) {
-        val intent = Intent(AlarmClock.ACTION_SET_TIMER).apply {
-            putExtra(AlarmClock.EXTRA_LENGTH, seconds)
-            putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK
-        }
-        context.startActivity(intent)
+        context.startActivity(Intent(action).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
     }
 }
