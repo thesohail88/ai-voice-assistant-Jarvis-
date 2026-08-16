@@ -8,34 +8,37 @@ import android.util.Log
 class NotificationInterceptorService : NotificationListenerService() {
 
     companion object {
-        var onNotificationReceived: ((sender: String, message: String, appName: String) -> Unit)? = null
+        var onNotificationReceived: ((sender: String, message: String, app: String) -> Unit)? = null
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
 
-        val packageName = sbn.packageName
-        val isTargetApp = packageName.contains("whatsapp") ||
-                packageName.contains("telegram") ||
-                packageName.contains("messaging") ||
-                packageName.contains("com.google.android.apps.messaging")
+        val packageName = sbn.packageName ?: return
+        val extras = sbn.notification.extras ?: return
 
-        if (!isTargetApp) return
+        // Filter system noise, ongoing downloads, or media playback notifications
+        if ((sbn.notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
 
-        val extras = sbn.notification.extras
-        val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
-        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim() ?: ""
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.trim() ?: ""
+        val bigText = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.trim() ?: ""
 
-        if (title.isNotBlank() && text.isNotBlank() && !text.contains("messages")) {
-            val appLabel = when {
-                packageName.contains("whatsapp") -> "WhatsApp"
-                packageName.contains("telegram") -> "Telegram"
-                else -> "SMS"
-            }
-            Log.d("NotificationInterceptor", "Intercepted message from $title on $appLabel: $text")
-            onNotificationReceived?.invoke(title, text, appLabel)
+        val effectiveMessage = if (bigText.isNotBlank()) bigText else text
+        if (effectiveMessage.isBlank()) return
+
+        val appLabel = when {
+            packageName.contains("dialer") || packageName.contains("telecom") -> "Phone Voicemail"
+            packageName.contains("messaging") || packageName.contains("mms") -> "SMS"
+            packageName.contains("whatsapp") -> "WhatsApp"
+            packageName.contains("telegram") -> "Telegram"
+            else -> "App"
+        }
+
+        // Only intercept SMS, Voicemails, and Direct Communication Apps
+        if (appLabel == "Phone Voicemail" || appLabel == "SMS" || appLabel == "WhatsApp" || appLabel == "Telegram") {
+            Log.d("NotificationInterceptor", "Intercepted message from $title ($appLabel): $effectiveMessage")
+            onNotificationReceived?.invoke(title, effectiveMessage, appLabel)
         }
     }
-
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) {}
 }
