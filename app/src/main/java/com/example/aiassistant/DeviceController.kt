@@ -23,6 +23,18 @@ class DeviceController(private val context: Context) {
     val accessibility: AgentAccessibilityService?
         get() = AgentAccessibilityService.instance
 
+    fun handleActionCommand(response: String) {
+        if (response.contains("ACTION_")) {
+            val lines = response.lines()
+            for (line in lines) {
+                if (line.contains("ACTION_")) {
+                    val tag = line.substring(line.indexOf("ACTION_")).trim()
+                    executeSingleAction(tag)
+                }
+            }
+        }
+    }
+
     fun executeSingleAction(actionTag: String): Boolean {
         val trimmed = actionTag.trim()
         try {
