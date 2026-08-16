@@ -52,6 +52,9 @@ class AssistantForegroundService : Service() {
 
         override fun onReceive(context: Context, intent: Intent) {
             try {
+                val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
+                val configuredKeyMode = prefs.getString("BLUETOOTH_BUTTON_BEHAVIOR", "LONG_PRESS_HOOK")
+
                 if (Intent.ACTION_MEDIA_BUTTON == intent.action || Intent.ACTION_VOICE_COMMAND == intent.action) {
                     val event = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
@@ -64,18 +67,34 @@ class AssistantForegroundService : Service() {
                         when (event.action) {
                             KeyEvent.ACTION_DOWN -> {
                                 buttonDownTimestamp = System.currentTimeMillis()
-                                if (event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
+                                if (configuredKeyMode == "VOICE_ASSIST_KEY" && event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
                                     triggerBluetoothActivation()
                                 }
                             }
                             KeyEvent.ACTION_UP -> {
                                 val duration = System.currentTimeMillis() - buttonDownTimestamp
-                                if (duration >= 500 && (
-                                    event.keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
-                                    event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
-                                    event.keyCode == KeyEvent.KEYCODE_CALL
-                                )) {
-                                    triggerBluetoothActivation()
+                                val isLongPress = duration >= 500
+                                val isShortPress = duration < 500
+
+                                when (configuredKeyMode) {
+                                    "LONG_PRESS_HOOK" -> {
+                                        if (isLongPress && (event.keyCode == KeyEvent.KEYCODE_HEADSETHOOK || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
+                                            triggerBluetoothActivation()
+                                        }
+                                    }
+                                    "SINGLE_CLICK_HOOK" -> {
+                                        if (isShortPress && (event.keyCode == KeyEvent.KEYCODE_HEADSETHOOK || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) {
+                                            triggerBluetoothActivation()
+                                        }
+                                    }
+                                    "DOUBLE_CLICK_NEXT" -> {
+                                        if (event.keyCode == KeyEvent.KEYCODE_MEDIA_NEXT) {
+                                            triggerBluetoothActivation()
+                                        }
+                                    }
+                                    else -> {
+                                        if (isLongPress) triggerBluetoothActivation()
+                                    }
                                 }
                             }
                         }
@@ -95,7 +114,7 @@ class AssistantForegroundService : Service() {
             if (Settings.canDrawOverlays(this@AssistantForegroundService)) {
                 hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
             }
-            voiceManager.speak("Yes sir, standing by.", AssistantPersona.JARVIS)
+            voiceManager.speak("At your service, sir. Standing by.", AssistantPersona.JARVIS)
             delay(3500)
             hudOverlayManager.hideHud()
         }
@@ -116,7 +135,7 @@ class AssistantForegroundService : Service() {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
             wakeLock = powerManager.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
-                "AIAssistant::LockScreenListeningLock"
+                "AIAssistant::UnrestrictedLockScreenLock"
             ).apply {
                 setReferenceCounted(false)
                 acquire(24 * 60 * 60 * 1000L)
@@ -125,7 +144,6 @@ class AssistantForegroundService : Service() {
             startServiceInForeground()
             requestContinuousAudioFocus()
 
-            // 1. Proactive Hardware / Battery Alerts
             proactiveTelemetryMonitor = ProactiveTelemetryMonitor(this) { alertText, persona ->
                 serviceScope.launch {
                     screenWakeHelper.wakeScreen(5000L)
@@ -139,16 +157,13 @@ class AssistantForegroundService : Service() {
             }
             proactiveTelemetryMonitor.startMonitoring()
 
-            // 2. Incoming Voicemail & SMS Notification Interceptor with Contact-Specific Translation
             NotificationInterceptorService.onNotificationReceived = { sender, message, app ->
                 serviceScope.launch {
                     val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
                     val defaultLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
-                    
-                    // Match sender name/number against per-contact rules
                     val targetLang = contactManager.getLanguageForContact(sender, defaultLang)
 
-                    val prompt = "Incoming $app message/voicemail from $sender: '$message'. Translate and deliver a 1-sentence tactical briefing in $targetLang."
+                    val prompt = "Incoming $app message/voicemail from $sender: '$message'. Translate and give a 1-sentence tactical briefing in $targetLang."
                     val responseText = aiRouter.processDirectTextPrompt(prompt, AssistantPersona.JARVIS)
                     
                     screenWakeHelper.wakeScreen(6000L)
@@ -161,7 +176,6 @@ class AssistantForegroundService : Service() {
                 }
             }
 
-            // 3. Register Headset Button Receiver
             val filter = IntentFilter().apply {
                 addAction(Intent.ACTION_MEDIA_BUTTON)
                 addAction(Intent.ACTION_VOICE_COMMAND)
@@ -175,7 +189,7 @@ class AssistantForegroundService : Service() {
 
             serviceScope.launch {
                 delay(800)
-                voiceManager.speak("Systems operational, sir. Standing by on lock screen.", AssistantPersona.JARVIS)
+                voiceManager.speak("Systems operational, sir. Continuous background monitoring active.", AssistantPersona.JARVIS)
                 startContinuousListening()
             }
         } catch (e: Exception) {
@@ -263,7 +277,7 @@ class AssistantForegroundService : Service() {
                 "JARVIS Core Engine",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Continuous voice recognition and lock-screen standby"
+                description = "Continuous 24/7 background audio recognition"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
@@ -279,7 +293,7 @@ class AssistantForegroundService : Service() {
 
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("JARVIS // Active Protocol")
-            .setContentText("Neural Core Standby • Lock-screen enabled")
+            .setContentText("Neural Core Standby • 24/7 Listening Armed")
             .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
