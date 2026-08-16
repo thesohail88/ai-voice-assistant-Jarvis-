@@ -43,7 +43,7 @@ class AssistantForegroundService : Service() {
         voiceManager = VoiceManager(this)
         deviceController = DeviceController(this)
         assistantMemory = AssistantMemory(this)
-        aiRouter = UnifiedAiRouter(keyConfig)
+        aiRouter = UnifiedAiRouter(keyConfig, this) // Pass context for JavaScript sandbox
 
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AIAssistant::HardwareMicWakeLock").apply {
