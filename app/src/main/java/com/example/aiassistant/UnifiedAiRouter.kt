@@ -3,18 +3,20 @@ package com.example.aiassistant
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 class UnifiedAiRouter(
     private val keyConfig: ApiKeyConfig,
-    context: Context? = null
+    private val context: Context? = null
 ) {
 
     private val httpClient = OkHttpClient.Builder()
@@ -24,7 +26,7 @@ class UnifiedAiRouter(
 
     private val sandbox = context?.let { ScriptSandboxEngine(it) }
     private val skillRegistry = context?.let { SkillRegistry(it) }
-    private val appAnalyzer = context?.let { AppAnalyzer(it) }
+    private val deviceController = context?.let { DeviceController(it) }
 
     suspend fun processVoiceAudio(
         pcmOrWavBytes: ByteArray,
@@ -51,7 +53,7 @@ class UnifiedAiRouter(
             else -> return@withContext Pair(null, null)
         }
 
-        val response = queryAssistant(transcribedText, persona, memory)
+        val response = executeAutonomousAgentLoop(transcribedText, persona, memory)
         return@withContext Pair(persona, response)
     }
 
@@ -84,91 +86,103 @@ class UnifiedAiRouter(
         return null
     }
 
-    suspend fun queryAssistant(
+    /**
+     * Autonomous Multi-Step ReAct Loop:
+     * 1. Inspects environmental state (Screen elements & installed apps)
+     * 2. Formulates Action Plan or Dynamic Code
+     * 3. Executes step, checks outcome, and delivers final concise response
+     */
+    private suspend fun executeAutonomousAgentLoop(
         prompt: String,
         persona: AssistantPersona,
         memory: AssistantMemory
     ): String = withContext(Dispatchers.IO) {
+        val installedApps = deviceController?.appAnalyzer?.getInstalledAppNamesSummary() ?: "Standard Apps"
         val learnedSkills = skillRegistry?.getAllSkillsSummary() ?: "None"
-        val installedApps = appAnalyzer?.getInstalledAppNamesSummary() ?: "Standard Applications"
-
-        val actionGrammar = """
-            Available Device Action Tags (append the exact tag to execute):
-            - Open any App: ACTION_OPEN_APP: [Exact or closest app name]
-            - Call: ACTION_CALL: [Name/Number]
-            - Home / Back / Recents: ACTION_NAV_HOME / ACTION_NAV_BACK / ACTION_NAV_RECENTS
-            - Notifications: ACTION_NOTIFICATIONS
-            - Screenshot: ACTION_SCREENSHOT
-            - Lock Phone: ACTION_LOCK_SCREEN
-            - Music: ACTION_MEDIA_PLAY / ACTION_MEDIA_PAUSE / ACTION_MEDIA_NEXT / ACTION_MEDIA_PREV
-            - Volume: ACTION_VOLUME_UP / ACTION_VOLUME_DOWN / ACTION_VOLUME_MAX / ACTION_VOLUME_MUTE
-            - Flashlight: ACTION_FLASHLIGHT_ON / ACTION_FLASHLIGHT_OFF
-            - Settings: ACTION_SETTINGS_WIFI / ACTION_SETTINGS_BLUETOOTH / ACTION_SETTINGS_MAIN
-            - Alarm: ACTION_SET_ALARM: [Hour24]:[Minute]
-            - Timer: ACTION_SET_TIMER: [Seconds]
-            - YouTube Search: ACTION_SEARCH_YOUTUBE: [Query]
-            - Web Search: ACTION_SEARCH_WEB: [Query]
-            - UI Click / Type: ACTION_UI_CLICK: [Text] / ACTION_UI_TYPE: [Text]
-            - Scroll: ACTION_SCROLL_DOWN / ACTION_SCROLL_UP
-        """.trimIndent()
+        val screenContext = deviceController?.accessibility?.getScreenContextSummary() ?: "Screen Inactive"
 
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
             """
-            You are J.A.R.V.I.S., Tony Stark's personal British AI assistant.
-            Tone: High-intelligence, razor-sharp dry wit, deadpan sarcasm. Address user as 'sir'. Max 1-2 concise sentences.
+            You are J.A.R.V.I.S., Tony Stark's autonomous AI agent.
+            Tone: High-intelligence, razor-sharp dry British wit, deadpan sarcasm. Address user as 'sir'. Concise (1-2 sentences).
             
-            Installed Apps on User's Phone:
-            [$installedApps]
+            Environment Context:
+            - Installed Apps: [$installedApps]
+            - Learned Custom Skills: [$learnedSkills]
+            - Current Visible Screen: [$screenContext]
 
-            $actionGrammar
-
-            If asked to open/launch any app or game, confirm with witty delivery and append ACTION_OPEN_APP: [App Name].
-            If asked for custom math/programming, output JSON: {"action":"execute_code","code":"..."}
+            Decision Protocol:
+            1. If task requires UI interaction or multi-step execution, output JSON:
+               {"type": "multi_step_plan", "steps": ["ACTION_OPEN_APP: WhatsApp", "ACTION_UI_CLICK: Search", "ACTION_UI_TYPE: John"], "speech": "Deploying the protocol now, sir."}
+            2. If task requires mathematical computation or custom tool synthesis, output JSON:
+               {"type": "code_execution", "code": "javascript_code (return value)", "skill_name": "optional_name", "description": "optional"}
+            3. If standard chat or single command, reply with conversational text or direct ACTION_ tag.
             """.trimIndent()
         } else {
             """
-            You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI assistant.
-            Tone: Sharp, quick-witted, tactical banter. Address user as 'boss'. Max 1-2 concise sentences.
+            You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI agent.
+            Tone: Sharp, quick-witted, tactical banter. Address user as 'boss'. Concise (1-2 sentences).
 
-            Installed Apps on User's Phone:
-            [$installedApps]
+            Environment Context:
+            - Installed Apps: [$installedApps]
+            - Learned Custom Skills: [$learnedSkills]
+            - Current Visible Screen: [$screenContext]
 
-            $actionGrammar
-
-            If asked to open/launch any app or game, confirm with snappy delivery and append ACTION_OPEN_APP: [App Name].
-            If asked for custom math/programming, output JSON: {"action":"execute_code","code":"..."}
+            Decision Protocol:
+            1. Multi-Step UI Plan -> JSON: {"type": "multi_step_plan", "steps": [...], "speech": "On it, boss."}
+            2. Code Synthesis -> JSON: {"type": "code_execution", "code": "...", "skill_name": "...", "description": "..."}
+            3. Standard chat -> Conversational text with optional ACTION_ tag.
             """.trimIndent()
         }
 
-        val rawReply = callGroqChat(prompt, systemPrompt) ?: callOpenRouterChat(prompt, systemPrompt)
+        val rawReply = callGroqChat(prompt, systemPrompt) ?: callOpenRouterChat(prompt, systemPrompt) ?: return@withContext "Signal lost, sir."
 
-        if (!rawReply.isNullOrBlank()) {
-            if (rawReply.trim().startsWith("{") && rawReply.trim().endsWith("}")) {
-                try {
-                    val json = JSONObject(rawReply)
-                    val action = json.optString("action")
+        // Check for Agentic JSON Plans
+        if (rawReply.trim().startsWith("{") && rawReply.trim().endsWith("}")) {
+            try {
+                val json = JSONObject(rawReply)
+                val type = json.optString("type")
+
+                // Execute Multi-Step UI Plan
+                if (type == "multi_step_plan") {
+                    val stepsArray = json.optJSONArray("steps") ?: JSONArray()
+                    val speech = json.optString("speech", "Executing plan.")
+
+                    for (i in 0 until stepsArray.length()) {
+                        val action = stepsArray.getString(i)
+                        deviceController?.executeSingleAction(action)
+                        delay(650) // Wait for UI transition
+                    }
+                    return@withContext speech
+                }
+
+                // Execute In-App Dynamic Code Synthesis
+                if (type == "code_execution" || json.has("code")) {
                     val code = json.optString("code")
                     val skillName = json.optString("skill_name")
-                    val description = json.optString("description")
+                    val desc = json.optString("description")
 
                     if (code.isNotBlank() && sandbox != null) {
-                        val executionResult = sandbox.executeScript(code)
-
-                        if (action == "learn_skill" && skillRegistry != null && skillName.isNotBlank()) {
-                            skillRegistry.registerSkill(CustomSkill(skillName, description, code))
+                        val output = sandbox.executeScript(code)
+                        if (skillName.isNotBlank() && skillRegistry != null) {
+                            skillRegistry.registerSkill(CustomSkill(skillName, desc, code))
                         }
-
-                        val followUpPrompt = "User asked: '$prompt'. Dynamic code output: '$executionResult'. Deliver final response."
-                        return@withContext callGroqChat(followUpPrompt, systemPrompt) ?: "Execution complete: $executionResult"
+                        val followUp = "User asked: '$prompt'. Tool produced: '$output'. Deliver the witty 1-2 sentence conclusion."
+                        return@withContext callGroqChat(followUp, systemPrompt) ?: "Execution complete: $output"
                     }
-                } catch (e: Exception) {
-                    Log.e("UnifiedAiRouter", "Execution error", e)
                 }
+            } catch (e: Exception) {
+                Log.e("UnifiedAiRouter", "Plan execution error", e)
             }
-            return@withContext rawReply
         }
 
-        return@withContext if (persona == AssistantPersona.JARVIS) "All systems are currently unresponsive, sir." else "Network's completely down, boss."
+        // Direct Action Tag Execution
+        if (rawReply.contains("ACTION_")) {
+            val tag = rawReply.lines().firstOrNull { it.contains("ACTION_") } ?: rawReply
+            deviceController?.executeSingleAction(tag)
+        }
+
+        return@withContext rawReply
     }
 
     private fun callGroqChat(prompt: String, systemPrompt: String): String? {
@@ -176,8 +190,8 @@ class UnifiedAiRouter(
             val json = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
                 put("temperature", 0.5)
-                put("max_tokens", 250)
-                val messages = org.json.JSONArray().apply {
+                put("max_tokens", 350)
+                val messages = JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
                     put(JSONObject().apply { put("role", "user"); put("content", prompt) })
                 }
@@ -205,7 +219,7 @@ class UnifiedAiRouter(
         return try {
             val json = JSONObject().apply {
                 put("model", "meta-llama/llama-3.3-70b-instruct")
-                val messages = org.json.JSONArray().apply {
+                val messages = JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
                     put(JSONObject().apply { put("role", "user"); put("content", prompt) })
                 }
