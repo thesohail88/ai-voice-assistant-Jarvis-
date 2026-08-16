@@ -86,7 +86,6 @@ class DeviceController(private val context: Context) {
 
     private fun clickUiElement(target: String) {
         if (target.contains(",")) {
-            // Coordinate click: "x,y"
             val coords = target.split(",")
             val x = coords[0].trim().toFloatOrNull()
             val y = coords[1].trim().toFloatOrNull()
