@@ -53,15 +53,22 @@ class VoiceManager(private val context: Context) {
                 putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, 0.0f)
             }
 
-            tts?.speak(cleanSpeech, TextToSpeech.QUEUE_FLUSH, params, "JARVIS_SYNTHESIS_ID")
+            tts?.speak(cleanSpeech, TextToSpeech.QUEUE_FLUSH, params, "ASSISTANT_UTTERANCE_ID")
         } catch (e: Exception) {
             Log.e("VoiceManager", "TTS playback error", e)
         }
     }
 
+    fun playVoiceSample(persona: AssistantPersona) {
+        if (persona == AssistantPersona.JARVIS) {
+            speak("Systems operational, sir. J.A.R.V.I.S. voice synthesis online and calibrated to your preferences.", AssistantPersona.JARVIS)
+        } else {
+            speak("All systems tactical and ready, boss. F.R.I.D.A.Y. acoustics active.", AssistantPersona.FRIDAY)
+        }
+    }
+
     private fun applyJarvisMaleProfile() {
-        val ukLocale = Locale.UK
-        tts?.language = ukLocale
+        tts?.language = Locale.UK
 
         val availableVoices = tts?.voices ?: emptySet()
         val jarvisMaleVoice = availableVoices.firstOrNull { voice ->
@@ -77,7 +84,7 @@ class VoiceManager(private val context: Context) {
             tts?.voice = jarvisMaleVoice
         }
 
-        // Fixed Pitch & Rate: Deep Resonant British Tone
+        // Exact Deep British Male Acoustic Profile
         tts?.setPitch(0.82f)
         tts?.setSpeechRate(0.92f)
     }
@@ -99,7 +106,7 @@ class VoiceManager(private val context: Context) {
             tts?.voice = fridayVoice
         }
 
-        // Fixed Pitch & Rate: Tactical Crisp Delivery
+        // Tactical Crisp Female Profile
         tts?.setPitch(1.18f)
         tts?.setSpeechRate(1.08f)
     }
