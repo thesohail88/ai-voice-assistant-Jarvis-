@@ -37,7 +37,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
-                android:text="24/7 ACTIVE • BLUETOOTH &amp; MIC ARMED"
+                android:text="24/7 ACTIVE • SMS/VOICEMAIL ARMED"
                 android:textColor="#00E676"
                 android:textSize="9sp" />
         </LinearLayout>
@@ -90,27 +90,28 @@
             android:textSize="10sp" />
 
         <Button
-            android:id="@+id/btnBtConfig"
+            android:id="@+id/btnTestVoiceSample"
             android:layout_width="0dp"
             android:layout_height="34dp"
             android:layout_marginStart="3dp"
             android:layout_weight="1.2"
-            android:background="#13334F"
+            android:background="#1B2838"
             android:fontFamily="monospace"
-            android:text="BT: LONG PRESS"
-            android:textColor="#FFD54F"
-            android:textSize="9sp" />
+            android:text="TEST VOICE"
+            android:textColor="#00E5FF"
+            android:textSize="10sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
     <!-- Center Arc Reactor Interactive Visualizer -->
     <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="140dp">
+        android:layout_height="130dp">
 
         <com.example.aiassistant.ArcReactorHudView
             android:id="@+id/arcReactorView"
-            android:layout_width="135dp"
-            android:layout_height="135dp"
+            android:layout_width="125dp"
+            android:layout_height="125dp"
             android:layout_gravity="center" />
     </FrameLayout>
 
