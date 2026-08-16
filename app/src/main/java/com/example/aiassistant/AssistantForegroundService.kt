@@ -54,7 +54,7 @@ class AssistantForegroundService : Service() {
 
         serviceScope.launch {
             delay(1500)
-            voiceManager.speak("Systems operational. AI Voicemail monitoring active.", AssistantPersona.JARVIS)
+            voiceManager.speak("I have indeed been uploaded, sir. We're online and ready.", AssistantPersona.JARVIS)
             startHardwareListening()
         }
     }
