@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Bluetooth & Headset Action Permissions -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
     <!-- Lock Screen, Wake & System Overlay -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -35,9 +39,17 @@
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Intercepts Bluetooth long-press voice assistant triggers -->
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.VOICE" />
             </intent-filter>
         </activity>
 
@@ -48,7 +60,7 @@
             android:exported="false"
             android:foregroundServiceType="microphone|mediaProjection" />
 
-        <!-- Notification & Message Interceptor -->
+        <!-- Notification Interceptor -->
         <service
             android:name=".NotificationInterceptorService"
             android:enabled="true"
@@ -59,7 +71,7 @@
             </intent-filter>
         </service>
 
-        <!-- Dynamic Context & Sensor Broadcast Receiver -->
+        <!-- Dynamic Context & Sensor Receiver -->
         <receiver
             android:name=".SystemContextTriggerReceiver"
             android:enabled="true"
@@ -69,15 +81,6 @@
                 <action android:name="android.intent.action.POWER_CONNECTED" />
                 <action android:name="android.intent.action.POWER_DISCONNECTED" />
                 <action android:name="android.net.wifi.STATE_CHANGE" />
-            </intent-filter>
-        </receiver>
-
-        <!-- Bluetooth / Earbud Hardware Button Receiver -->
-        <receiver
-            android:name=".MediaButtonTriggerReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
 
