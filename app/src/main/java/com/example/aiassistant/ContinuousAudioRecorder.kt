@@ -12,10 +12,10 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
     private val sampleRate = 16000
     private val channelConfig = AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat) * 2
+    private val bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat).coerceAtLeast(4096) * 2
 
     private var audioRecord: AudioRecord? = null
-    private var isRecording = false
+    @Volatile private var isRecording = false
     private var recordingThread: Thread? = null
 
     @SuppressLint("MissingPermission")
@@ -23,8 +23,9 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
         if (isRecording) return
 
         try {
+            // VOICE_RECOGNITION maintains hardware mic priority in lock screen
             audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION, // Optimized for AI STT & Noise Suppression
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 sampleRate,
                 channelConfig,
                 audioFormat,
@@ -32,63 +33,72 @@ class ContinuousAudioRecorder(private val onAudioChunkReady: (ByteArray) -> Unit
             )
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                Log.e("ContinuousRecorder", "AudioRecord initialization failed")
-                return
+                Log.e("ContinuousRecorder", "AudioRecord init failed, trying MIC source fallback")
+                audioRecord = AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize
+                )
             }
 
             audioRecord?.startRecording()
             isRecording = true
 
             recordingThread = Thread {
-                val pcmBuffer = ShortArray(bufferSize / 2)
+                val pcmBuffer = ShortArray(1024)
                 val chunkAccumulator = mutableListOf<Byte>()
-                var soundDetected = false
-                var silenceCounter = 0
+                var speechDetected = false
+                var silenceFrames = 0
 
                 while (isRecording) {
                     val readCount = audioRecord?.read(pcmBuffer, 0, pcmBuffer.size) ?: 0
                     if (readCount > 0) {
-                        var maxAmplitude = 0
-
-                        // Apply 2.5x Software Audio Gain Boost for distance sensitivity
+                        var maxPeak = 0
                         val byteData = ByteArray(readCount * 2)
+
+                        // 3.0x Software Gain Boost for whisper and distant capture
                         for (i in 0 until readCount) {
-                            var sample = (pcmBuffer[i] * 2.5f).toInt()
+                            var sample = (pcmBuffer[i] * 3.0f).toInt()
                             if (sample > Short.MAX_VALUE) sample = Short.MAX_VALUE.toInt()
                             if (sample < Short.MIN_VALUE) sample = Short.MIN_VALUE.toInt()
 
                             val absVal = abs(sample)
-                            if (absVal > maxAmplitude) maxAmplitude = absVal
+                            if (absVal > maxPeak) maxPeak = absVal
 
                             byteData[i * 2] = (sample and 0xFF).toByte()
                             byteData[i * 2 + 1] = ((sample shr 8) and 0xFF).toByte()
                         }
 
-                        // Voice Activity Threshold (Lowered so you don't need to yell)
-                        if (maxAmplitude > 700) {
-                            soundDetected = true
-                            silenceCounter = 0
-                        } else if (soundDetected) {
-                            silenceCounter++
+                        // Sensitive energy trigger threshold
+                        if (maxPeak > 450) {
+                            speechDetected = true
+                            silenceFrames = 0
+                        } else if (speechDetected) {
+                            silenceFrames++
                         }
 
-                        if (soundDetected) {
+                        if (speechDetected) {
                             for (b in byteData) chunkAccumulator.add(b)
 
-                            // 1.8s chunk buffer window or end of phrase
-                            if (chunkAccumulator.size >= 16000 * 2 * 2 || silenceCounter > 8) {
-                                onAudioChunkReady(chunkAccumulator.toByteArray())
+                            // Send chunk when user finishes sentence or hits 2.5s
+                            if (chunkAccumulator.size >= 16000 * 2 * 2.5 || silenceFrames > 12) {
+                                if (chunkAccumulator.size >= 8000) { // Minimum 0.25s audio
+                                    onAudioChunkReady(chunkAccumulator.toByteArray())
+                                }
                                 chunkAccumulator.clear()
-                                soundDetected = false
-                                silenceCounter = 0
+                                speechDetected = false
+                                silenceFrames = 0
                             }
                         }
                     }
                 }
             }
+            recordingThread?.priority = Thread.MAX_PRIORITY
             recordingThread?.start()
         } catch (e: Exception) {
-            Log.e("ContinuousRecorder", "Recording thread failed", e)
+            Log.e("ContinuousRecorder", "AudioRecord start error", e)
         }
     }
 
