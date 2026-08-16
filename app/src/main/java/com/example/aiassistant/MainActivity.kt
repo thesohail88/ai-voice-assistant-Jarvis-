@@ -12,7 +12,6 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
-import android.widget.FrameLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -31,7 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnFollowUpToggle: Button
     private lateinit var btnStartService: Button
     private lateinit var btnPermissions: Button
-    private lateinit var arcReactorContainer: FrameLayout
+    private lateinit var arcReactorView: ArcReactorHudView
 
     private var activePersona = AssistantPersona.JARVIS
     private var isFollowUpEnabled = true
@@ -52,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         btnFollowUpToggle = findViewById(R.id.btnFollowUpToggle)
         btnStartService = findViewById(R.id.btnStartService)
         btnPermissions = findViewById(R.id.btnPermissions)
-        arcReactorContainer = findViewById(R.id.arcReactorContainer)
+        arcReactorView = findViewById(R.id.arcReactorView)
 
         val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
         val currentLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
@@ -60,49 +59,50 @@ class MainActivity : AppCompatActivity() {
 
         btnLangSwitch.text = "LANG: ${currentLang.uppercase()}"
         updateFollowUpButtonUI()
-
         updateTelemetryReadout()
         checkAndRequestSystemPermissions()
 
-        // 1. Switch Active Persona (J.A.R.V.I.S. <-> F.R.I.D.A.Y.)
+        // Switch Persona (JARVIS <-> FRIDAY)
         btnTogglePersona.setOnClickListener {
             activePersona = if (activePersona == AssistantPersona.JARVIS) {
-                btnTogglePersona.text = "MODE: FRIDAY"
+                btnTogglePersona.text = "FRIDAY"
                 btnTogglePersona.setTextColor(Color.parseColor("#FF5722"))
-                btnTogglePersona.setBackgroundColor(Color.parseColor("#3E1C12"))
-                logToTerminal("Switched primary persona to F.R.I.D.A.Y.")
+                btnTogglePersona.setBackgroundColor(Color.parseColor("#381308"))
+                arcReactorView.setPersona(AssistantPersona.FRIDAY)
+                logToTerminal("Active persona switched to F.R.I.D.A.Y.")
                 AssistantPersona.FRIDAY
             } else {
-                btnTogglePersona.text = "MODE: JARVIS"
+                btnTogglePersona.text = "JARVIS"
                 btnTogglePersona.setTextColor(Color.parseColor("#00E5FF"))
-                btnTogglePersona.setBackgroundColor(Color.parseColor("#10253F"))
-                logToTerminal("Switched primary persona to J.A.R.V.I.S.")
+                btnTogglePersona.setBackgroundColor(Color.parseColor("#132B45"))
+                arcReactorView.setPersona(AssistantPersona.JARVIS)
+                logToTerminal("Active persona switched to J.A.R.V.I.S.")
                 AssistantPersona.JARVIS
             }
         }
 
-        // 2. Multilingual Voicemail & SMS Language Picker
+        // Multilingual Voicemail/SMS Translation Selector
         btnLangSwitch.setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Select Voicemail / SMS Translation Language")
+                .setTitle("Select Translation Language")
                 .setItems(supportedLanguages) { _, which ->
                     val chosen = supportedLanguages[which]
                     prefs.edit().putString("MESSAGE_LANGUAGE", chosen).apply()
                     btnLangSwitch.text = "LANG: ${chosen.uppercase()}"
-                    logToTerminal("Voicemail & SMS output language set to: $chosen")
+                    logToTerminal("Voicemail/SMS output language updated to: $chosen")
                 }
                 .show()
         }
 
-        // 3. Toggle Follow-Up Conversation Mode
+        // Follow-Up Conversation Mode Toggle
         btnFollowUpToggle.setOnClickListener {
             isFollowUpEnabled = !isFollowUpEnabled
             prefs.edit().putBoolean("FOLLOW_UP_CONVERSATION", isFollowUpEnabled).apply()
             updateFollowUpButtonUI()
-            logToTerminal("Follow-up continuous dialogue: ${if (isFollowUpEnabled) "ENABLED" else "DISABLED"}")
+            logToTerminal("Follow-up dialogue mode: ${if (isFollowUpEnabled) "ACTIVE" else "MUTED"}")
         }
 
-        // 4. Activate 24/7 Foreground Standby Engine
+        // Start Core Service
         btnStartService.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 val serviceIntent = Intent(this, AssistantForegroundService::class.java)
@@ -118,13 +118,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // 5. Check System Overlay & Access Permissions
+        // Permissions Verification
         btnPermissions.setOnClickListener {
             validateAndRequestPermissions()
         }
 
-        // 6. Interactive Core Tap Trigger
-        arcReactorContainer.setOnClickListener {
+        // Tap Arc Reactor Core
+        arcReactorView.setOnClickListener {
             logToTerminal("Manual HUD core trigger engaged.")
             val voiceManager = VoiceManager(this)
             voiceManager.speak("Systems operational, sir. Awaiting orders.", activePersona)
