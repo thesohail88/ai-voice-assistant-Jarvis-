@@ -35,7 +35,6 @@ class AssistantForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO)
 
-    // Loaded dynamically via BuildConfig from local.properties
     private val keyConfig = ApiKeyConfig(
         groqKey = BuildConfig.GROQ_KEY,
         geminiKey = BuildConfig.GEMINI_KEY,
@@ -52,7 +51,6 @@ class AssistantForegroundService : Service() {
         hudOverlayManager = HudOverlayManager(this)
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-        // Persistent CPU WakeLock ensuring 24/7 background execution
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
@@ -65,7 +63,7 @@ class AssistantForegroundService : Service() {
         requestContinuousAudioFocus()
         startServiceInForeground()
 
-        // Hook proactive hardware/battery alerts
+        // Proactive hardware & battery alerts
         proactiveTelemetryMonitor = ProactiveTelemetryMonitor(this) { alertText, persona ->
             serviceScope.launch {
                 screenWakeHelper.wakeScreen(5000L)
@@ -77,17 +75,27 @@ class AssistantForegroundService : Service() {
         }
         proactiveTelemetryMonitor.startMonitoring()
 
-        // Hook incoming messaging listener (WhatsApp, Telegram, SMS)
+        // Incoming message intelligence listener
         NotificationInterceptorService.onNotificationReceived = { sender, message, app ->
             serviceScope.launch {
                 val prompt = "Incoming $app message from $sender: '$message'. Give a 1-sentence tactical briefing."
-                val (persona, reply) = aiRouter.processVoiceAudio(ByteArray(0), assistantMemory) // or route via direct prompt
-                val speech = reply ?: "Sir, $sender sent a message on $app: $message"
+                val response = aiRouter.processDirectTextPrompt(prompt, AssistantPersona.JARVIS)
                 
                 screenWakeHelper.wakeScreen(6000L)
                 hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
-                voiceManager.speak(speech, AssistantPersona.JARVIS)
+                voiceManager.speak(response, AssistantPersona.JARVIS)
                 delay(5000)
+                hudOverlayManager.hideHud()
+            }
+        }
+
+        // Silent Bluetooth earbud click trigger
+        MediaButtonTriggerReceiver.onMediaButtonClicked = {
+            serviceScope.launch {
+                screenWakeHelper.wakeScreen(5000L)
+                hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
+                voiceManager.speak("At your service, sir.", AssistantPersona.JARVIS)
+                delay(3000)
                 hudOverlayManager.hideHud()
             }
         }
@@ -136,18 +144,17 @@ class AssistantForegroundService : Service() {
     private fun startContinuousListening() {
         audioRecorder = ContinuousAudioRecorder { audioBytes ->
             serviceScope.launch {
+                hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
+
                 val (persona, response) = aiRouter.processVoiceAudio(audioBytes, assistantMemory)
                 if (persona != null && !response.isNullOrBlank()) {
-                    // Instantly awaken display, trigger haptics, and display Arc Reactor HUD
                     screenWakeHelper.wakeScreen(8000L)
-                    hudOverlayManager.showListeningHud(persona)
-
                     deviceController.handleActionCommand(response)
                     voiceManager.speak(response, persona)
-
-                    delay(5000)
-                    hudOverlayManager.hideHud()
                 }
+
+                delay(4000)
+                hudOverlayManager.hideHud()
             }
         }
         audioRecorder?.startListening()
