@@ -3,24 +3,21 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.aiassistant">
 
-    <!-- Audio, Recording & Foreground Service Permissions -->
+    <!-- Audio & Foreground Service Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Bluetooth & Headset Action Permissions -->
+    <!-- Bluetooth & Hardware Controls -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-
-    <!-- Lock Screen, Wake & System Overlay -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- Network & Device Telemetry -->
+    <!-- Network & Device Discovery -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -45,7 +42,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Intercepts Bluetooth long-press voice assistant triggers -->
             <intent-filter>
                 <action android:name="android.intent.action.VOICE_COMMAND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -53,12 +49,12 @@
             </intent-filter>
         </activity>
 
-        <!-- Core Foreground Standby Engine -->
+        <!-- Service declared strictly with microphone type for continuous background listening -->
         <service
             android:name=".AssistantForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="microphone|mediaProjection" />
+            android:foregroundServiceType="microphone" />
 
         <!-- Notification Interceptor -->
         <service
@@ -71,7 +67,7 @@
             </intent-filter>
         </service>
 
-        <!-- Dynamic Context & Sensor Receiver -->
+        <!-- Context & Telemetry Broadcast Receiver -->
         <receiver
             android:name=".SystemContextTriggerReceiver"
             android:enabled="true"
