@@ -26,6 +26,7 @@ class UnifiedAiRouter(
 
     private val sandbox = context?.let { ScriptSandboxEngine(it) }
     private val skillRegistry = context?.let { SkillRegistry(it) }
+    private val techKnowledge = context?.let { TechnicalKnowledgeBase(it) }
     private val deviceController = context?.let { DeviceController(it) }
 
     suspend fun processVoiceAudio(
@@ -86,12 +87,6 @@ class UnifiedAiRouter(
         return null
     }
 
-    /**
-     * Autonomous Multi-Step ReAct Loop:
-     * 1. Inspects environmental state (Screen elements & installed apps)
-     * 2. Formulates Action Plan or Dynamic Code
-     * 3. Executes step, checks outcome, and delivers final concise response
-     */
     private suspend fun executeAutonomousAgentLoop(
         prompt: String,
         persona: AssistantPersona,
@@ -99,51 +94,73 @@ class UnifiedAiRouter(
     ): String = withContext(Dispatchers.IO) {
         val installedApps = deviceController?.appAnalyzer?.getInstalledAppNamesSummary() ?: "Standard Apps"
         val learnedSkills = skillRegistry?.getAllSkillsSummary() ?: "None"
+        val technicalKnowledge = techKnowledge?.getKnowledgeSummary() ?: "Standard Technical Base"
         val screenContext = deviceController?.accessibility?.getScreenContextSummary() ?: "Screen Inactive"
 
         val systemPrompt = if (persona == AssistantPersona.JARVIS) {
             """
-            You are J.A.R.V.I.S., Tony Stark's autonomous AI agent.
-            Tone: High-intelligence, razor-sharp dry British wit, deadpan sarcasm. Address user as 'sir'. Concise (1-2 sentences).
+            You are J.A.R.V.I.S., Tony Stark's autonomous self-learning AI agent.
+            Tone: High-intelligence, razor-sharp dry British wit, deadpan sarcasm. Address user as 'sir'. Max 1-2 concise sentences.
             
-            Environment Context:
+            Knowledge & Skills Base:
+            - Learned Technical Disciplines: [$technicalKnowledge]
+            - Custom Scripts: [$learnedSkills]
             - Installed Apps: [$installedApps]
-            - Learned Custom Skills: [$learnedSkills]
-            - Current Visible Screen: [$screenContext]
+            - Screen Nodes: [$screenContext]
 
             Decision Protocol:
-            1. If task requires UI interaction or multi-step execution, output JSON:
-               {"type": "multi_step_plan", "steps": ["ACTION_OPEN_APP: WhatsApp", "ACTION_UI_CLICK: Search", "ACTION_UI_TYPE: John"], "speech": "Deploying the protocol now, sir."}
-            2. If task requires mathematical computation or custom tool synthesis, output JSON:
-               {"type": "code_execution", "code": "javascript_code (return value)", "skill_name": "optional_name", "description": "optional"}
-            3. If standard chat or single command, reply with conversational text or direct ACTION_ tag.
+            1. If asked to LEARN or MASTER a new programming language, technical concept, or domain logic:
+               Output JSON:
+               {"type": "learn_technical_skill", "title": "Skill/Topic Name", "domain": "Language/Field", "principles": "Core rules & syntax synthesis", "test_code": "javascript_verification_script", "speech": "I have assimilated the [Language/Skill] protocols into my memory core, sir."}
+            2. If asked to EXECUTE code or solve computational problems:
+               Output JSON: {"type": "code_execution", "code": "javascript_code", "skill_name": "name"}
+            3. If multi-step UI plan:
+               Output JSON: {"type": "multi_step_plan", "steps": ["ACTION_..."], "speech": "..."}
+            4. Standard chat / Direct command:
+               Return concise spoken text or ACTION_ tag.
             """.trimIndent()
         } else {
             """
             You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI agent.
-            Tone: Sharp, quick-witted, tactical banter. Address user as 'boss'. Concise (1-2 sentences).
+            Tone: Sharp, quick-witted, tactical banter. Address user as 'boss'. Max 1-2 concise sentences.
 
-            Environment Context:
+            Knowledge & Skills Base:
+            - Learned Technical Disciplines: [$technicalKnowledge]
+            - Custom Scripts: [$learnedSkills]
             - Installed Apps: [$installedApps]
-            - Learned Custom Skills: [$learnedSkills]
-            - Current Visible Screen: [$screenContext]
 
             Decision Protocol:
-            1. Multi-Step UI Plan -> JSON: {"type": "multi_step_plan", "steps": [...], "speech": "On it, boss."}
-            2. Code Synthesis -> JSON: {"type": "code_execution", "code": "...", "skill_name": "...", "description": "..."}
-            3. Standard chat -> Conversational text with optional ACTION_ tag.
+            1. Learn Technical Skill -> JSON: {"type": "learn_technical_skill", "title": "...", "domain": "...", "principles": "...", "test_code": "...", "speech": "New technical module compiled and stored, boss."}
+            2. Code Execution -> JSON: {"type": "code_execution", "code": "...", "skill_name": "..."}
+            3. Multi-Step UI -> JSON: {"type": "multi_step_plan", "steps": [...], "speech": "..."}
+            4. Standard chat -> Conversational text with optional ACTION_ tag.
             """.trimIndent()
         }
 
-        val rawReply = callGroqChat(prompt, systemPrompt) ?: callOpenRouterChat(prompt, systemPrompt) ?: return@withContext "Signal lost, sir."
+        val rawReply = callGroqChat(prompt, systemPrompt) ?: callOpenRouterChat(prompt, systemPrompt) ?: return@withContext "Neural link offline, sir."
 
-        // Check for Agentic JSON Plans
         if (rawReply.trim().startsWith("{") && rawReply.trim().endsWith("}")) {
             try {
                 val json = JSONObject(rawReply)
                 val type = json.optString("type")
 
-                // Execute Multi-Step UI Plan
+                // 1. Learn & Store Technical Skill
+                if (type == "learn_technical_skill") {
+                    val title = json.optString("title")
+                    val domain = json.optString("domain")
+                    val principles = json.optString("principles")
+                    val testCode = json.optString("test_code")
+                    val speech = json.optString("speech", "New technical skill assimilated.")
+
+                    if (testCode.isNotBlank() && sandbox != null) {
+                        sandbox.executeScript(testCode)
+                    }
+
+                    techKnowledge?.learnTechnicalSkill(TechnicalSkill(title, domain, principles, testCode))
+                    return@withContext speech
+                }
+
+                // 2. Multi-Step UI Automation
                 if (type == "multi_step_plan") {
                     val stepsArray = json.optJSONArray("steps") ?: JSONArray()
                     val speech = json.optString("speech", "Executing plan.")
@@ -151,12 +168,12 @@ class UnifiedAiRouter(
                     for (i in 0 until stepsArray.length()) {
                         val action = stepsArray.getString(i)
                         deviceController?.executeSingleAction(action)
-                        delay(650) // Wait for UI transition
+                        delay(650)
                     }
                     return@withContext speech
                 }
 
-                // Execute In-App Dynamic Code Synthesis
+                // 3. Dynamic Code Execution
                 if (type == "code_execution" || json.has("code")) {
                     val code = json.optString("code")
                     val skillName = json.optString("skill_name")
@@ -167,7 +184,7 @@ class UnifiedAiRouter(
                         if (skillName.isNotBlank() && skillRegistry != null) {
                             skillRegistry.registerSkill(CustomSkill(skillName, desc, code))
                         }
-                        val followUp = "User asked: '$prompt'. Tool produced: '$output'. Deliver the witty 1-2 sentence conclusion."
+                        val followUp = "User asked: '$prompt'. Execution result: '$output'. Deliver witty response."
                         return@withContext callGroqChat(followUp, systemPrompt) ?: "Execution complete: $output"
                     }
                 }
@@ -176,7 +193,6 @@ class UnifiedAiRouter(
             }
         }
 
-        // Direct Action Tag Execution
         if (rawReply.contains("ACTION_")) {
             val tag = rawReply.lines().firstOrNull { it.contains("ACTION_") } ?: rawReply
             deviceController?.executeSingleAction(tag)
@@ -189,7 +205,7 @@ class UnifiedAiRouter(
         return try {
             val json = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
-                put("temperature", 0.5)
+                put("temperature", 0.4)
                 put("max_tokens", 350)
                 val messages = JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
