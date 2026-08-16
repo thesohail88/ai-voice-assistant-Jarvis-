@@ -63,7 +63,7 @@ class AssistantForegroundService : Service() {
         requestContinuousAudioFocus()
         startServiceInForeground()
 
-        // Proactive hardware & battery alerts
+        // 1. Proactive Hardware / Battery Alert Monitoring
         proactiveTelemetryMonitor = ProactiveTelemetryMonitor(this) { alertText, persona ->
             serviceScope.launch {
                 screenWakeHelper.wakeScreen(5000L)
@@ -75,21 +75,21 @@ class AssistantForegroundService : Service() {
         }
         proactiveTelemetryMonitor.startMonitoring()
 
-        // Incoming message intelligence listener
+        // 2. Incoming Notification Intelligence Listener
         NotificationInterceptorService.onNotificationReceived = { sender, message, app ->
             serviceScope.launch {
                 val prompt = "Incoming $app message from $sender: '$message'. Give a 1-sentence tactical briefing."
-                val response = aiRouter.processDirectTextPrompt(prompt, AssistantPersona.JARVIS)
+                val responseText = aiRouter.processDirectTextPrompt(prompt, AssistantPersona.JARVIS)
                 
                 screenWakeHelper.wakeScreen(6000L)
                 hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
-                voiceManager.speak(response, AssistantPersona.JARVIS)
+                voiceManager.speak(responseText, AssistantPersona.JARVIS)
                 delay(5000)
                 hudOverlayManager.hideHud()
             }
         }
 
-        // Silent Bluetooth earbud click trigger
+        // 3. Silent Bluetooth Earbud Button Click Listener
         MediaButtonTriggerReceiver.onMediaButtonClicked = {
             serviceScope.launch {
                 screenWakeHelper.wakeScreen(5000L)
@@ -146,7 +146,10 @@ class AssistantForegroundService : Service() {
             serviceScope.launch {
                 hudOverlayManager.showListeningHud(AssistantPersona.JARVIS)
 
-                val (persona, response) = aiRouter.processVoiceAudio(audioBytes, assistantMemory)
+                val resultPair = aiRouter.processVoiceAudio(audioBytes, assistantMemory)
+                val persona = resultPair.first
+                val response = resultPair.second
+
                 if (persona != null && !response.isNullOrBlank()) {
                     screenWakeHelper.wakeScreen(8000L)
                     deviceController.handleActionCommand(response)
@@ -201,7 +204,10 @@ class AssistantForegroundService : Service() {
         audioRecorder?.stopListening()
         proactiveTelemetryMonitor.stopMonitoring()
         hudOverlayManager.hideHud()
-        wakeLock?.let { if (it.isHeld) it.release() }
+        val lock = wakeLock
+        if (lock != null && lock.isHeld) {
+            lock.release()
+        }
         voiceManager.shutdown()
         super.onDestroy()
     }
