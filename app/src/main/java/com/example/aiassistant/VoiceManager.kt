@@ -2,8 +2,6 @@ package com.example.aiassistant
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.audiofx.DynamicsProcessing
-import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
@@ -14,7 +12,6 @@ class VoiceManager(private val context: Context) {
 
     private var tts: TextToSpeech? = null
     @Volatile private var isTtsReady = false
-    private var dynamicsProcessing: DynamicsProcessing? = null
 
     init {
         tts = TextToSpeech(context, { status ->
@@ -33,7 +30,7 @@ class VoiceManager(private val context: Context) {
                 .build()
             tts?.setAudioAttributes(audioAttributes)
         } catch (e: Exception) {
-            Log.e("VoiceManager", "Error configuring audio attributes", e)
+            Log.e("VoiceManager", "Error setting audio attributes", e)
         }
     }
 
@@ -41,19 +38,18 @@ class VoiceManager(private val context: Context) {
         if (!isTtsReady || text.isBlank()) return
 
         var cleanSpeech = text.replace(Regex("ACTION_[A-Z_:]+.*"), "").trim()
-        cleanSpeech = if (persona == AssistantPersona.FRIDAY) {
-            applyFridayProsodyLilt(cleanSpeech)
-        } else {
-            humanizeProsody(cleanSpeech)
-        }
-
+        cleanSpeech = sanitizeForSsml(cleanSpeech)
         if (cleanSpeech.isBlank()) return
 
         try {
-            if (persona == AssistantPersona.JARVIS) {
-                applyJarvisMaleProfile()
+            val ssmlPayload = if (persona == AssistantPersona.JARVIS) {
+                applyJarvisProfile()
+                // Deep British male: 118 Hz baseline pitch with steady pacing
+                """<speak><prosody pitch="-4st" rate="92%"><emphasis level="moderate">$cleanSpeech</emphasis></prosody></speak>"""
             } else {
-                applyFridayKerryCondonProfile()
+                applyFridayProfile()
+                // Kerry Condon: 210 Hz mezzo-soprano with authentic Irish cadence
+                """<speak><prosody pitch="+3st" rate="104%"><prosody contour="(0%,+0st) (75%,+1st) (100%,+3st)">$cleanSpeech</prosody></prosody></speak>"""
             }
 
             val params = Bundle().apply {
@@ -61,25 +57,25 @@ class VoiceManager(private val context: Context) {
                 putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, 0.0f)
             }
 
-            tts?.speak(cleanSpeech, TextToSpeech.QUEUE_FLUSH, params, "ASSISTANT_UTTERANCE_ID")
+            tts?.speak(ssmlPayload, TextToSpeech.QUEUE_FLUSH, params, "ASSISTANT_SSML_ID")
         } catch (e: Exception) {
-            Log.e("VoiceManager", "TTS playback error", e)
+            Log.e("VoiceManager", "TTS SSML error, falling back to raw playback", e)
+            tts?.speak(cleanSpeech, TextToSpeech.QUEUE_FLUSH, null, "FALLBACK_ID")
         }
     }
 
     fun playVoiceSample(persona: AssistantPersona) {
         if (persona == AssistantPersona.JARVIS) {
-            speak("Systems operational, sir. J.A.R.V.I.S. voice synthesis calibrated to standard protocol.", AssistantPersona.JARVIS)
+            speak("Systems operational, sir.", AssistantPersona.JARVIS)
         } else {
-            speak("All systems tactical and ready, boss. F.R.I.D.A.Y. acoustics active.", AssistantPersona.FRIDAY)
+            speak("All systems tactical and ready, boss.", AssistantPersona.FRIDAY)
         }
     }
 
-    private fun applyJarvisMaleProfile() {
+    private fun applyJarvisProfile() {
         tts?.language = Locale.UK
-
         val availableVoices = tts?.voices ?: emptySet()
-        val jarvisMaleVoice = availableVoices.firstOrNull { voice ->
+        val jarvisVoice = availableVoices.firstOrNull { voice ->
             voice.locale == Locale.UK &&
                     !voice.name.lowercase().contains("female") &&
                     !voice.name.lowercase().contains("woman") &&
@@ -88,16 +84,14 @@ class VoiceManager(private val context: Context) {
                      voice.name.lowercase().contains("en-gb-x-gbd"))
         } ?: availableVoices.firstOrNull { it.locale == Locale.UK && !it.isNetworkConnectionRequired }
 
-        if (jarvisMaleVoice != null) {
-            tts?.voice = jarvisMaleVoice
+        if (jarvisVoice != null) {
+            tts?.voice = jarvisVoice
         }
-
-        // Deep Resonant British Tone (Paul Bettany profile)
-        tts?.setPitch(0.82f)
+        tts?.setPitch(0.80f)
         tts?.setSpeechRate(0.92f)
     }
 
-    private fun applyFridayKerryCondonProfile() {
+    private fun applyFridayProfile() {
         val irishLocale = Locale("en", "IE")
         val langResult = tts?.setLanguage(irishLocale)
         if (langResult == TextToSpeech.LANG_MISSING_DATA || langResult == TextToSpeech.LANG_NOT_SUPPORTED) {
@@ -105,54 +99,29 @@ class VoiceManager(private val context: Context) {
         }
 
         val availableVoices = tts?.voices ?: emptySet()
-        
-        // Target high-definition neural County Tipperary / Irish dialect
         val fridayVoice = availableVoices.firstOrNull { voice ->
-            voice.locale.language == "en" && voice.locale.country == "IE" &&
-                    (voice.name.lowercase().contains("female") || 
-                     voice.name.lowercase().contains("en-ie-x-") || 
-                     voice.quality >= Voice.QUALITY_HIGH)
-        } ?: availableVoices.firstOrNull { voice ->
-            voice.locale == Locale.UK && 
-                    (voice.name.lowercase().contains("female") || voice.name.lowercase().contains("en-gb-x-gbf"))
+            (voice.locale.language == "en" && voice.locale.country == "IE") ||
+            (voice.locale == Locale.UK && (voice.name.lowercase().contains("female") || voice.name.lowercase().contains("en-gb-x-gbf")))
         }
 
         if (fridayVoice != null) {
             tts?.voice = fridayVoice
         }
-
-        // Target: ~210 Hz F0 average pitch (Mezzo-Soprano range 165 - 260 Hz)
-        // Rate: 1.04x for crisp, tactical military-assistant delivery
-        tts?.setPitch(1.05f)
+        tts?.setPitch(1.10f)
         tts?.setSpeechRate(1.04f)
     }
 
-    /**
-     * Prosody normalization for Irish cadence: adds micro-pauses before conjunctions
-     * and terminal punctuation to preserve natural upward vocal inflection.
-     */
-    private fun applyFridayProsodyLilt(input: String): String {
+    private fun sanitizeForSsml(input: String): String {
         return input
-            .replace("...", ", ")
-            .replace(" - ", ", ")
-            .replace(";", ",")
-            .replace("!", "?") // Softens hard stops into dynamic melodic liftoff
-            .replace(Regex("(?<=[a-zA-Z]),(?=[a-zA-Z])"), ", ")
-            .trim()
-    }
-
-    private fun humanizeProsody(input: String): String {
-        return input
-            .replace("...", ", ")
-            .replace(" - ", ", ")
-            .replace(";", ",")
-            .replace(Regex("(?<=[a-zA-Z]),(?=[a-zA-Z])"), ", ")
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;")
             .trim()
     }
 
     fun shutdown() {
-        dynamicsProcessing?.release()
-        dynamicsProcessing = null
         tts?.stop()
         tts?.shutdown()
         isTtsReady = false
