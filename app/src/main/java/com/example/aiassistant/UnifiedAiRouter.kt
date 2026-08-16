@@ -50,9 +50,9 @@ class UnifiedAiRouter(
         val lowerText = transcribedText.lowercase()
 
         val persona = when {
-            lowerText.contains("jarvis") || lowerText.contains("travis") -> AssistantPersona.JARVIS
             lowerText.contains("friday") || lowerText.contains("frieda") -> AssistantPersona.FRIDAY
-            else -> return@withContext Pair(null, null)
+            lowerText.contains("jarvis") || lowerText.contains("travis") || lowerText.contains("service") -> AssistantPersona.JARVIS
+            else -> AssistantPersona.JARVIS
         }
 
         db?.memoryDao()?.insertMemory(
@@ -69,7 +69,17 @@ class UnifiedAiRouter(
     }
 
     suspend fun processDirectTextPrompt(prompt: String, persona: AssistantPersona): String = withContext(Dispatchers.IO) {
-        return@withContext executeAutonomousAgentLoop(prompt, persona)
+        db?.memoryDao()?.insertMemory(
+            MemoryEntry(persona = persona.name, sender = "USER", content = prompt)
+        )
+
+        val response = executeAutonomousAgentLoop(prompt, persona)
+
+        db?.memoryDao()?.insertMemory(
+            MemoryEntry(persona = persona.name, sender = "ASSISTANT", content = response)
+        )
+
+        return@withContext response
     }
 
     private fun transcribeAudioWithGroq(wavBytes: ByteArray): String? {
@@ -123,7 +133,6 @@ class UnifiedAiRouter(
             - Multi-Step JSON: {"type": "multi_step_plan", "steps": ["ACTION_OPEN_APP: WhatsApp", "ACTION_UI_CLICK: Search"], "speech": "Opening chat, sir."}
             - File Action JSON: {"type": "file_action", "sub_action": "READ"|"WRITE"|"PARSE_CSV"|"LIST", "file_name": "...", "content": "..."}
             - Save Pref JSON: {"type": "save_pref", "key": "...", "value": "...", "speech": "Preference noted."}
-            - Direct reply with ACTION commands embedded if needed.
             """.trimIndent()
         } else {
             """
