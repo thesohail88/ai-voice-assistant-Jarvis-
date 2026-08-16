@@ -20,11 +20,10 @@ class UnifiedAiRouter(
 ) {
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(12, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    private val sandbox = context?.let { ScriptSandboxEngine(it) }
     private val techKnowledge = context?.let { TechnicalKnowledgeBase(it) }
     private val deviceController = context?.let { DeviceController(it) }
     private val fileProcessor = context?.let { FileDataProcessor(it) }
@@ -35,7 +34,7 @@ class UnifiedAiRouter(
         memory: AssistantMemory,
         onTranscription: ((String) -> Unit)? = null
     ): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
-        if (pcmOrWavBytes.size < 3200) return@withContext Pair(null, null)
+        if (pcmOrWavBytes.size < 2000) return@withContext Pair(null, null)
 
         val wavData = if (isWavHeaderPresent(pcmOrWavBytes)) {
             pcmOrWavBytes
@@ -83,6 +82,7 @@ class UnifiedAiRouter(
     }
 
     private fun transcribeAudioWithGroq(wavBytes: ByteArray): String? {
+        if (keyConfig.groqKey.isBlank()) return null
         return try {
             val requestBody = MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
@@ -144,7 +144,11 @@ class UnifiedAiRouter(
             """.trimIndent()
         }
 
-        val rawReply = callGroqChat(prompt, systemPrompt) ?: callOpenRouterChat(prompt, systemPrompt) ?: return@withContext "Signal lost, sir."
+        // Tri-Tier Router: 1. Groq (Llama-3.3 / GPT-OSS) -> 2. Google Gemini 2.5/3.x Flash -> 3. OpenRouter
+        val rawReply = callGroqChat(prompt, systemPrompt)
+            ?: callGeminiChat(prompt, systemPrompt)
+            ?: callOpenRouterChat(prompt, systemPrompt)
+            ?: return@withContext "All auxiliary neural uplinks unreachable, sir. Please verify your API keys."
 
         if (rawReply.trim().startsWith("{") && rawReply.trim().endsWith("}")) {
             try {
@@ -195,36 +199,85 @@ class UnifiedAiRouter(
     }
 
     private fun callGroqChat(prompt: String, systemPrompt: String): String? {
-        return try {
-            val json = JSONObject().apply {
-                put("model", "llama-3.3-70b-versatile")
-                put("temperature", 0.4)
-                put("max_tokens", 350)
-                val messages = JSONArray().apply {
-                    put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
-                    put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+        if (keyConfig.groqKey.isBlank()) return null
+        val modelsToTry = listOf("llama-3.3-70b-versatile", "openai/gpt-oss-120b")
+        for (modelName in modelsToTry) {
+            try {
+                val json = JSONObject().apply {
+                    put("model", modelName)
+                    put("temperature", 0.4)
+                    put("max_tokens", 350)
+                    val messages = JSONArray().apply {
+                        put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
+                        put(JSONObject().apply { put("role", "user"); put("content", prompt) })
+                    }
+                    put("messages", messages)
                 }
-                put("messages", messages)
-            }
 
-            val request = Request.Builder()
-                .url("https://api.groq.com/openai/v1/chat/completions")
-                .addHeader("Authorization", "Bearer ${keyConfig.groqKey}")
-                .addHeader("Content-Type", "application/json")
-                .post(json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
-                .build()
+                val request = Request.Builder()
+                    .url("https://api.groq.com/openai/v1/chat/completions")
+                    .addHeader("Authorization", "Bearer ${keyConfig.groqKey}")
+                    .addHeader("Content-Type", "application/json")
+                    .post(json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                    .build()
 
-            val response = httpClient.newCall(request).execute()
-            if (response.isSuccessful) {
-                val resJson = JSONObject(response.body?.string() ?: "")
-                resJson.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim()
-            } else null
-        } catch (e: Exception) {
-            null
+                val response = httpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val resJson = JSONObject(response.body?.string() ?: "")
+                    return resJson.getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim()
+                }
+            } catch (_: Exception) {}
         }
+        return null
+    }
+
+    private fun callGeminiChat(prompt: String, systemPrompt: String): String? {
+        if (keyConfig.geminiKey.isBlank()) return null
+        val modelsToTry = listOf("gemini-2.5-flash", "gemini-1.5-flash")
+        for (modelName in modelsToTry) {
+            try {
+                val json = JSONObject().apply {
+                    val systemInstruction = JSONObject().apply {
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().apply { put("text", systemPrompt) })
+                        })
+                    }
+                    put("system_instruction", systemInstruction)
+
+                    val contents = JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("role", "user")
+                            put("parts", JSONArray().apply {
+                                put(JSONObject().apply { put("text", prompt) })
+                            })
+                        })
+                    }
+                    put("contents", contents)
+                }
+
+                val request = Request.Builder()
+                    .url("https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=${keyConfig.geminiKey}")
+                    .addHeader("Content-Type", "application/json")
+                    .post(json.toString().toRequestBody("application/json".toMediaTypeOrNull()))
+                    .build()
+
+                val response = httpClient.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val resJson = JSONObject(response.body?.string() ?: "")
+                    return resJson.getJSONArray("candidates")
+                        .getJSONObject(0)
+                        .getJSONObject("content")
+                        .getJSONArray("parts")
+                        .getJSONObject(0)
+                        .getString("text").trim()
+                }
+            } catch (_: Exception) {}
+        }
+        return null
     }
 
     private fun callOpenRouterChat(prompt: String, systemPrompt: String): String? {
+        if (keyConfig.openRouterKey.isBlank()) return null
         return try {
             val json = JSONObject().apply {
                 put("model", "meta-llama/llama-3.3-70b-instruct")
