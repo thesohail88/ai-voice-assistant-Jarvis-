@@ -1,5 +1,6 @@
 package com.example.aiassistant
 
+import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -11,27 +12,25 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-data class ApiKeyConfig(
-    val groqKey: String,
-    val geminiKey: String,
-    val openRouterKey: String
-)
-
-class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
+class UnifiedAiRouter(
+    private val keyConfig: ApiKeyConfig,
+    context: Context? = null
+) {
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(12, TimeUnit.SECONDS)
         .build()
 
+    private val sandbox = context?.let { ScriptSandboxEngine(it) }
+    private val skillRegistry = context?.let { SkillRegistry(it) }
+
     suspend fun processVoiceAudio(
         pcmOrWavBytes: ByteArray,
         memory: AssistantMemory,
         onTranscription: ((String) -> Unit)? = null
     ): Pair<AssistantPersona?, String?> = withContext(Dispatchers.IO) {
-        if (pcmOrWavBytes.size < 3200) {
-            return@withContext Pair(null, null)
-        }
+        if (pcmOrWavBytes.size < 3200) return@withContext Pair(null, null)
 
         val wavData = if (isWavHeaderPresent(pcmOrWavBytes)) {
             pcmOrWavBytes
@@ -39,24 +38,18 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
             WavUtils.pcmToWav(pcmOrWavBytes, sampleRate = 16000, channels = 1)
         }
 
-        // 1. Transcribe audio with Groq Whisper Turbo
         val transcribedText = transcribeAudioWithGroq(wavData)
-        if (transcribedText.isNullOrBlank()) {
-            Log.e("UnifiedAiRouter", "Transcription returned empty.")
-            return@withContext Pair(null, null)
-        }
+        if (transcribedText.isNullOrBlank()) return@withContext Pair(null, null)
 
         onTranscription?.invoke(transcribedText)
         val lowerText = transcribedText.lowercase()
 
-        // 2. Identify Wake Word
         val persona = when {
             lowerText.contains("jarvis") -> AssistantPersona.JARVIS
             lowerText.contains("friday") -> AssistantPersona.FRIDAY
             else -> return@withContext Pair(null, null)
         }
 
-        // 3. Generate witty/sarcastic response
         val response = queryAssistant(transcribedText, persona, memory)
         return@withContext Pair(persona, response)
     }
@@ -87,8 +80,6 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
             if (response.isSuccessful) {
                 val json = JSONObject(resBody)
                 return json.optString("text", "").trim()
-            } else {
-                Log.e("UnifiedAiRouter", "Groq STT Error: HTTP ${response.code} -> $resBody")
             }
         } catch (e: Exception) {
             Log.e("UnifiedAiRouter", "STT Exception", e)
@@ -101,32 +92,60 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
         persona: AssistantPersona,
         memory: AssistantMemory
     ): String = withContext(Dispatchers.IO) {
-        val systemPrompt = if (persona == AssistantPersona.JARVIS) {
-            """
-            You are J.A.R.V.I.S., Tony Stark's AI assistant. 
-            Tone: Sophisticated British gentleman with a razor-sharp, deadpan wit and dry sarcasm. 
-            Style: Keep responses ultra-concise (1-2 sentences max). Always address the user respectfully as 'sir', but don't hesitate to deliver subtle, high-brow roasts or dry observations. Never explain the joke.
-            """.trimIndent()
-        } else {
-            """
-            You are F.R.I.D.A.Y., Tony Stark's tactical Irish AI assistant. 
-            Tone: Sharp, confident, direct, with quick-witted, snappy banter and pragmatic sarcasm. 
-            Style: Keep responses ultra-concise (1-2 sentences max). Be quick to offer reality checks with natural Irish phrasing and tactical attitude.
-            """.trimIndent()
+        val learnedSkills = skillRegistry?.getAllSkillsSummary() ?: "None"
+
+        val systemPrompt = """
+            You are ${if (persona == AssistantPersona.JARVIS) "JARVIS (sophisticated, witty British butler AI)" else "FRIDAY (tactical, sharp Irish AI)"}.
+            You have a sandboxed JavaScript code execution engine.
+            Currently learned custom skills: [$learnedSkills].
+
+            If the user asks you to perform a mathematical calculation, generate dynamic logic, write a program, or learn a new automated skill:
+            Respond STRICTLY with a JSON object:
+            {
+              "action": "execute_code" OR "learn_skill",
+              "skill_name": "name_of_skill",
+              "description": "short description",
+              "code": "javascript_code_here (must return a value)",
+              "speech_template": "Spoken response summarizing the outcome with witty delivery."
+            }
+
+            If it is a regular conversation or device command, respond directly with conversational text (1-2 sentences).
+        """.trimIndent()
+
+        val rawReply = callGroqChat(prompt, systemPrompt) ?: callOpenRouterChat(prompt, systemPrompt)
+
+        if (!rawReply.isNullOrBlank()) {
+            // Check if LLM outputted dynamic code synthesis JSON
+            if (rawReply.trim().startsWith("{") && rawReply.trim().endsWith("}")) {
+                try {
+                    val json = JSONObject(rawReply)
+                    val action = json.optString("action")
+                    val code = json.optString("code")
+                    val skillName = json.optString("skill_name")
+                    val description = json.optString("description")
+
+                    if (code.isNotBlank() && sandbox != null) {
+                        val executionResult = sandbox.executeScript(code)
+
+                        if (action == "learn_skill" && skillRegistry != null && skillName.isNotBlank()) {
+                            skillRegistry.registerSkill(CustomSkill(skillName, description, code))
+                        }
+
+                        // Formulate final spoken response with code output
+                        val followUpPrompt = "The user asked: '$prompt'. The synthesized code produced output: '$executionResult'. Deliver the final 1-2 sentence response."
+                        return@withContext callGroqChat(followUpPrompt, systemPrompt) ?: "Execution complete: $executionResult"
+                    }
+                } catch (e: Exception) {
+                    Log.e("UnifiedAiRouter", "Dynamic execution parsing error", e)
+                }
+            }
+            return@withContext rawReply
         }
 
-        // Primary: Groq Llama 3.3 70B Turbo
-        val groqResponse = callGroqChat(prompt, systemPrompt)
-        if (!groqResponse.isNullOrBlank()) return@withContext groqResponse
-
-        // Failover: OpenRouter
-        val openRouterResponse = callOpenRouterChat(prompt, systemPrompt)
-        if (!openRouterResponse.isNullOrBlank()) return@withContext openRouterResponse
-
         return@withContext if (persona == AssistantPersona.JARVIS) {
-            "I'd love to help with that, sir, but my network connections seem to have abandoned us."
+            "I'd love to calculate that, sir, but my synthesis link is unresponsive."
         } else {
-            "Network's completely down, boss. You're on your own for this one."
+            "Tool engine offline, boss. Can't run that script right now."
         }
     }
 
@@ -134,8 +153,8 @@ class UnifiedAiRouter(private val keyConfig: ApiKeyConfig) {
         return try {
             val json = JSONObject().apply {
                 put("model", "llama-3.3-70b-versatile")
-                put("temperature", 0.6)
-                put("max_tokens", 150)
+                put("temperature", 0.3)
+                put("max_tokens", 300)
                 val messages = org.json.JSONArray().apply {
                     put(JSONObject().apply { put("role", "system"); put("content", systemPrompt) })
                     put(JSONObject().apply { put("role", "user"); put("content", prompt) })
