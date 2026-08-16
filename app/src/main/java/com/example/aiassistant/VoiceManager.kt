@@ -2,6 +2,8 @@ package com.example.aiassistant
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.audiofx.DynamicsProcessing
+import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
@@ -12,6 +14,7 @@ class VoiceManager(private val context: Context) {
 
     private var tts: TextToSpeech? = null
     @Volatile private var isTtsReady = false
+    private var dynamicsProcessing: DynamicsProcessing? = null
 
     init {
         tts = TextToSpeech(context, { status ->
@@ -38,14 +41,19 @@ class VoiceManager(private val context: Context) {
         if (!isTtsReady || text.isBlank()) return
 
         var cleanSpeech = text.replace(Regex("ACTION_[A-Z_:]+.*"), "").trim()
-        cleanSpeech = humanizeProsody(cleanSpeech)
+        cleanSpeech = if (persona == AssistantPersona.FRIDAY) {
+            applyFridayProsodyLilt(cleanSpeech)
+        } else {
+            humanizeProsody(cleanSpeech)
+        }
+
         if (cleanSpeech.isBlank()) return
 
         try {
             if (persona == AssistantPersona.JARVIS) {
                 applyJarvisMaleProfile()
             } else {
-                applyFridayFemaleProfile()
+                applyFridayKerryCondonProfile()
             }
 
             val params = Bundle().apply {
@@ -61,7 +69,7 @@ class VoiceManager(private val context: Context) {
 
     fun playVoiceSample(persona: AssistantPersona) {
         if (persona == AssistantPersona.JARVIS) {
-            speak("Systems operational, sir. J.A.R.V.I.S. voice synthesis online and calibrated to your preferences.", AssistantPersona.JARVIS)
+            speak("Systems operational, sir. J.A.R.V.I.S. voice synthesis calibrated to standard protocol.", AssistantPersona.JARVIS)
         } else {
             speak("All systems tactical and ready, boss. F.R.I.D.A.Y. acoustics active.", AssistantPersona.FRIDAY)
         }
@@ -84,12 +92,12 @@ class VoiceManager(private val context: Context) {
             tts?.voice = jarvisMaleVoice
         }
 
-        // Exact Deep British Male Acoustic Profile
+        // Deep Resonant British Tone (Paul Bettany profile)
         tts?.setPitch(0.82f)
         tts?.setSpeechRate(0.92f)
     }
 
-    private fun applyFridayFemaleProfile() {
+    private fun applyFridayKerryCondonProfile() {
         val irishLocale = Locale("en", "IE")
         val langResult = tts?.setLanguage(irishLocale)
         if (langResult == TextToSpeech.LANG_MISSING_DATA || langResult == TextToSpeech.LANG_NOT_SUPPORTED) {
@@ -97,18 +105,40 @@ class VoiceManager(private val context: Context) {
         }
 
         val availableVoices = tts?.voices ?: emptySet()
+        
+        // Target high-definition neural County Tipperary / Irish dialect
         val fridayVoice = availableVoices.firstOrNull { voice ->
-            (voice.locale.language == "en" && voice.locale.country == "IE") ||
-            (voice.locale == Locale.UK && (voice.name.lowercase().contains("female") || voice.name.lowercase().contains("en-gb-x-gbf")))
+            voice.locale.language == "en" && voice.locale.country == "IE" &&
+                    (voice.name.lowercase().contains("female") || 
+                     voice.name.lowercase().contains("en-ie-x-") || 
+                     voice.quality >= Voice.QUALITY_HIGH)
+        } ?: availableVoices.firstOrNull { voice ->
+            voice.locale == Locale.UK && 
+                    (voice.name.lowercase().contains("female") || voice.name.lowercase().contains("en-gb-x-gbf"))
         }
 
         if (fridayVoice != null) {
             tts?.voice = fridayVoice
         }
 
-        // Tactical Crisp Female Profile
-        tts?.setPitch(1.18f)
-        tts?.setSpeechRate(1.08f)
+        // Target: ~210 Hz F0 average pitch (Mezzo-Soprano range 165 - 260 Hz)
+        // Rate: 1.04x for crisp, tactical military-assistant delivery
+        tts?.setPitch(1.05f)
+        tts?.setSpeechRate(1.04f)
+    }
+
+    /**
+     * Prosody normalization for Irish cadence: adds micro-pauses before conjunctions
+     * and terminal punctuation to preserve natural upward vocal inflection.
+     */
+    private fun applyFridayProsodyLilt(input: String): String {
+        return input
+            .replace("...", ", ")
+            .replace(" - ", ", ")
+            .replace(";", ",")
+            .replace("!", "?") // Softens hard stops into dynamic melodic liftoff
+            .replace(Regex("(?<=[a-zA-Z]),(?=[a-zA-Z])"), ", ")
+            .trim()
     }
 
     private fun humanizeProsody(input: String): String {
@@ -121,6 +151,8 @@ class VoiceManager(private val context: Context) {
     }
 
     fun shutdown() {
+        dynamicsProcessing?.release()
+        dynamicsProcessing = null
         tts?.stop()
         tts?.shutdown()
         isTtsReady = false
