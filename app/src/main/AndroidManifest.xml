@@ -3,13 +3,13 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.example.aiassistant">
 
-    <!-- Audio & Foreground Service Permissions -->
+    <!-- Audio, Recording & Service Permissions -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Bluetooth & Hardware Controls -->
+    <!-- Bluetooth & Hardware Interceptors -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -17,7 +17,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- Network & Device Discovery -->
+    <!-- Network & App Telemetry -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -29,14 +29,13 @@
         android:label="JARVIS"
         android:roundIcon="@android:drawable/sym_def_app_icon"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.DeviceDefault.NoActionBar"
+        android:theme="@style/Theme.AppCompat.NoActionBar"
         tools:targetApi="34">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
-            
+            android:theme="@style/Theme.AppCompat.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -49,14 +48,14 @@
             </intent-filter>
         </activity>
 
-        <!-- Service declared strictly with microphone type for continuous background listening -->
+        <!-- Core Foreground Engine -->
         <service
             android:name=".AssistantForegroundService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
-        <!-- Notification Interceptor -->
+        <!-- Notification & Voicemail/Message Interceptor -->
         <service
             android:name=".NotificationInterceptorService"
             android:enabled="true"
@@ -67,7 +66,7 @@
             </intent-filter>
         </service>
 
-        <!-- Context & Telemetry Broadcast Receiver -->
+        <!-- Context & Telemetry Receiver -->
         <receiver
             android:name=".SystemContextTriggerReceiver"
             android:enabled="true"
