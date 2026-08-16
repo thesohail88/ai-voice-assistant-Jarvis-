@@ -44,7 +44,6 @@ class AssistantForegroundService : Service() {
         openRouterKey = BuildConfig.OPENROUTER_KEY
     )
 
-    // Bluetooth Long-Press Detector Receiver
     private val mediaButtonReceiver = object : BroadcastReceiver() {
         private var buttonDownTimestamp = 0L
 
@@ -61,14 +60,12 @@ class AssistantForegroundService : Service() {
                     when (event.action) {
                         KeyEvent.ACTION_DOWN -> {
                             buttonDownTimestamp = System.currentTimeMillis()
-                            // Keycode dedicated to assistant long-press on modern Bluetooth headsets
                             if (event.keyCode == KeyEvent.KEYCODE_VOICE_ASSIST) {
                                 triggerBluetoothActivation()
                             }
                         }
                         KeyEvent.ACTION_UP -> {
                             val duration = System.currentTimeMillis() - buttonDownTimestamp
-                            // Long-press detection threshold: 600ms or more
                             if (duration >= 600 && (
                                 event.keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
                                 event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
@@ -117,7 +114,7 @@ class AssistantForegroundService : Service() {
         requestContinuousAudioFocus()
         startServiceInForeground()
 
-        // 1. Proactive Hardware / Battery Alert Monitoring
+        // 1. Proactive Hardware Alerts
         proactiveTelemetryMonitor = ProactiveTelemetryMonitor(this) { alertText, persona ->
             serviceScope.launch {
                 screenWakeHelper.wakeScreen(5000L)
@@ -129,10 +126,13 @@ class AssistantForegroundService : Service() {
         }
         proactiveTelemetryMonitor.startMonitoring()
 
-        // 2. Incoming Notification Intelligence Listener
+        // 2. Incoming Voicemail & Message Intelligence with Dynamic Translation Language
         NotificationInterceptorService.onNotificationReceived = { sender, message, app ->
             serviceScope.launch {
-                val prompt = "Incoming $app message from $sender: '$message'. Give a 1-sentence tactical briefing."
+                val prefs = getSharedPreferences("AssistantPrefs", Context.MODE_PRIVATE)
+                val targetLang = prefs.getString("MESSAGE_LANGUAGE", "English") ?: "English"
+
+                val prompt = "Incoming $app message/voicemail from $sender: '$message'. Translate and deliver a 1-sentence tactical briefing in $targetLang."
                 val responseText = aiRouter.processDirectTextPrompt(prompt, AssistantPersona.JARVIS)
                 
                 screenWakeHelper.wakeScreen(6000L)
@@ -170,7 +170,7 @@ class AssistantForegroundService : Service() {
             startForeground(
                 1001,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
             )
         } else {
             startForeground(1001, notification)
