@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
 import android.os.Build
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -17,7 +18,7 @@ class HudOverlayManager(private val context: Context) {
     private var isShowing = false
 
     fun showListeningHud(persona: AssistantPersona) {
-        if (isShowing) return
+        if (isShowing || !Settings.canDrawOverlays(context)) return
 
         val layoutParams = WindowManager.LayoutParams(
             220,
@@ -36,12 +37,13 @@ class HudOverlayManager(private val context: Context) {
             y = 120
         }
 
-        hudView = ArcReactorView(context, persona)
         try {
+            hudView = ArcReactorView(context, persona)
             windowManager.addView(hudView, layoutParams)
             isShowing = true
         } catch (e: Exception) {
-            e.printStackTrace()
+            hudView = null
+            isShowing = false
         }
     }
 
@@ -50,8 +52,7 @@ class HudOverlayManager(private val context: Context) {
         try {
             hudView?.stopAnimation()
             windowManager.removeView(hudView)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
         } finally {
             hudView = null
             isShowing = false
@@ -62,7 +63,7 @@ class HudOverlayManager(private val context: Context) {
     private class ArcReactorView(context: Context, private val persona: AssistantPersona) : View(context) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private var rotationAngle = 0f
-        private var pulseRadius = 30f
+        private var pulseRadius = 28f
         private var animator: ValueAnimator? = null
 
         init {
@@ -72,7 +73,7 @@ class HudOverlayManager(private val context: Context) {
                 interpolator = LinearInterpolator()
                 addUpdateListener {
                     rotationAngle = it.animatedValue as Float
-                    pulseRadius = 25f + (kotlin.math.sin(Math.toRadians(rotationAngle.toDouble())).toFloat() * 8f)
+                    pulseRadius = 24f + (kotlin.math.sin(Math.toRadians(rotationAngle.toDouble())).toFloat() * 6f)
                     invalidate()
                 }
                 start()
@@ -88,17 +89,14 @@ class HudOverlayManager(private val context: Context) {
             val cx = width / 2f
             val cy = height / 2f
 
-            // JARVIS = Cyan/Stark Blue (#00E5FF), FRIDAY = Tactical Amber/Crimson (#FF3D00)
             val baseColor = if (persona == AssistantPersona.JARVIS) Color.parseColor("#00E5FF") else Color.parseColor("#FF5722")
 
-            // Outer Glowing Ring
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = 4f
             paint.color = baseColor
             paint.alpha = 180
             canvas.drawCircle(cx, cy, 60f, paint)
 
-            // Rotating Segmented Rings
             canvas.save()
             canvas.rotate(rotationAngle, cx, cy)
             paint.strokeWidth = 6f
@@ -109,18 +107,6 @@ class HudOverlayManager(private val context: Context) {
             canvas.drawArc(rect, 240f, 60f, false, paint)
             canvas.restore()
 
-            // Counter-rotating Inner Core
-            canvas.save()
-            canvas.rotate(-rotationAngle * 1.5f, cx, cy)
-            paint.strokeWidth = 3f
-            paint.alpha = 140
-            val innerRect = RectF(cx - 35f, cy - 35f, cx + 35f, cy + 35f)
-            canvas.drawArc(innerRect, 30f, 40f, false, paint)
-            canvas.drawArc(innerRect, 150f, 40f, false, paint)
-            canvas.drawArc(innerRect, 270f, 40f, false, paint)
-            canvas.restore()
-
-            // Glowing Pulsing Center Core
             paint.style = Paint.Style.FILL
             paint.color = Color.WHITE
             paint.alpha = 220
