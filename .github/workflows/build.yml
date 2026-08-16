@@ -24,6 +24,13 @@ jobs:
         with:
           gradle-version: '8.6'
 
+      # ---> STEP ADDED HERE <---
+      - name: Create local.properties
+        run: |
+          echo "GROQ_API_KEY=${{ secrets.GROQ_API_KEY }}" >> local.properties
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> local.properties
+          echo "OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}" >> local.properties
+
       - name: Build Debug APK
         run: gradle assembleDebug --stacktrace
 
