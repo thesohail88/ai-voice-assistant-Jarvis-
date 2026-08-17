@@ -1,0 +1,47 @@
+name: Generate Neural Models
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub web UI
+  push:
+    paths:
+      - 'model_generator/**'
+
+jobs:
+  build-models:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r model_generator/requirements.txt
+
+      - name: Run Model Export Scripts
+        run: |
+          cd model_generator
+          python export_silero_vad.py
+          python train_export_wakewords.py
+
+      - name: Commit and Push Generated Models
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/*.onnx
+          if git diff --staged --quiet; then
+            echo "No new models generated."
+          else
+            git commit -m "Auto-generate ONNX models via GitHub Actions"
+            git push
+          fi
+          
